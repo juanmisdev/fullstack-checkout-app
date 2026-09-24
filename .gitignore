@@ -14,3 +14,7 @@ coverage/
 # misc
 .DS_Store
 *.log
+# local tooling (SDD/odd artifacts) — not part of the app
+.atl/
+odd/
+openspec/
