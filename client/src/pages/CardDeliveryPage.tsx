@@ -86,7 +86,8 @@ export function CardDeliveryDialog({
     onOpenChange(false);
   };
 
-  const showFieldError = (valid: boolean) => touched && !valid;
+  // `errorCondition` is the per-field invalidity expression (e.g. !numberValid).
+  const showFieldError = (errorCondition: boolean) => touched && errorCondition;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

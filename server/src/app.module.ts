@@ -3,6 +3,7 @@
 import { Injectable, Module } from '@nestjs/common';
 import { ProductsController, TransactionsController, CheckoutController } from './interface/http/controllers';
 import { CheckoutService } from './application/services/checkout.service';
+import { TRANSACTION_REPOSITORY, ID_GENERATOR } from './application/ports/tokens';
 import { CheckoutUseCase } from './application/use-cases/checkout.use-case';
 import {
   InMemoryProductRepository,
@@ -12,8 +13,6 @@ import {
 } from './infrastructure/persistence/in-memory.repositories';
 import { PaymentGatewayAdapter } from './infrastructure/gateways/payment-gateway.adapter';
 import { Product } from './domain/products/product.entity';
-
-const ID_GENERATOR = Symbol('ID_GENERATOR');
 
 @Injectable()
 class UuidGenerator {
@@ -26,12 +25,34 @@ class UuidGenerator {
   controllers: [ProductsController, TransactionsController, CheckoutController],
   providers: [
     CheckoutService,
-    CheckoutUseCase,
+    {
+      // The use case is a plain class (no Nest decorators), so wire it explicitly:
+      // constructor(repo, txRepo, customerRepo, deliveryRepo, gateway, idGenerator)
+      provide: CheckoutUseCase,
+      useFactory: (
+        productRepo: InMemoryProductRepository,
+        transactionRepo: InMemoryTransactionRepository,
+        customerRepo: InMemoryCustomerRepository,
+        deliveryRepo: InMemoryDeliveryRepository,
+        gateway: PaymentGatewayAdapter,
+        idGenerator: UuidGenerator,
+      ) => new CheckoutUseCase(productRepo, transactionRepo, customerRepo, deliveryRepo, gateway, idGenerator),
+      inject: [
+        InMemoryProductRepository,
+        InMemoryTransactionRepository,
+        InMemoryCustomerRepository,
+        InMemoryDeliveryRepository,
+        PaymentGatewayAdapter,
+        UuidGenerator,
+      ],
+    },
+    { provide: UuidGenerator, useClass: UuidGenerator },
     PaymentGatewayAdapter,
     InMemoryProductRepository,
     InMemoryTransactionRepository,
     InMemoryCustomerRepository,
     InMemoryDeliveryRepository,
+    { provide: TRANSACTION_REPOSITORY, useExisting: InMemoryTransactionRepository },
     { provide: ID_GENERATOR, useClass: UuidGenerator },
   ],
 })
