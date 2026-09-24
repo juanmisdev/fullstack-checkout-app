@@ -123,7 +123,7 @@ Success response (`data` wrapper):
 }
 ```
 
-On a business error, the checkout controller maps the error code to an HTTP status but **currently returns the error as a plain object** instead of throwing, so the HTTP response keeps the Nest default status (e.g. `201`) while the body carries the intended status code. This is the actual behavior:
+On a business error, the checkout controller throws a mapped Nest `HttpException`, so the HTTP status matches the error type and the response body carries the error details:
 
 ```json
 {
@@ -135,15 +135,13 @@ On a business error, the checkout controller maps the error code to an HTTP stat
 
 Error mapping table:
 
-| Error code            | Intended HTTP status |
-|-----------------------|----------------------|
-| `INSUFFICIENT_STOCK`  | 409                  |
-| `PRODUCT_NOT_FOUND`   | 404                  |
-| `PAYMENT_DECLINED`    | 402                  |
-| `INVALID_CARD`        | 422                  |
-| Other                 | 500                  |
-
-> Known limitation: because the error body is returned rather than thrown, the actual HTTP status does not match the table above (the client handles this by reading `message`/`error` from the body). Throwing a mapped `HttpException` is planned as future work.
+| Error code            | HTTP status |
+|-----------------------|-------------|
+| `INSUFFICIENT_STOCK`  | 409         |
+| `PRODUCT_NOT_FOUND`   | 404         |
+| `PAYMENT_DECLINED`    | 402         |
+| `INVALID_CARD`        | 422         |
+| Other                 | 500         |
 
 ## Data model
 
@@ -244,4 +242,4 @@ cd client && npm run test
 - REST API: products, transactions, checkout with error mapping
 - Server tests (Jest, 75 tests, 93.87% statements) and client tests (Vitest, 37 tests, 91.62% statements)
 
-🚧 Future work: Prisma/PostgreSQL persistence adapters, Postman collection, mapped HTTP exceptions for checkout errors, CI pipeline.
+🚧 Future work: Prisma/PostgreSQL persistence adapters, Postman collection, CI pipeline.

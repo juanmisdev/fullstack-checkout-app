@@ -23,7 +23,7 @@ export interface DeliveryRepositoryPort {
   save(delivery: Delivery): Promise<void>;
 }
 
-// Outbound port for the external payment gateway (e.g. Wompi sandbox).
+// Outbound port for the external payment gateway sandbox.
 export interface PaymentGatewayPort {
   /**
    * Charges the given amount in cents. Returns the gateway transaction id

@@ -13,10 +13,11 @@ export interface GatewayAcceptanceToken {
 
 @Injectable()
 export class PaymentGatewayAdapter implements PaymentGatewayPort {
-  private readonly baseUrl = process.env.GATEWAY_API_URL ?? 'https://api-sandbox.co.uat.wompi.dev/v1';
+  private readonly baseUrl = process.env.GATEWAY_API_URL ?? '';
   private readonly publicKey = process.env.GATEWAY_PUBLIC_KEY ?? '';
 
   async getAcceptanceToken(): Promise<string> {
+    if (!this.baseUrl) throw new GatewayError('GATEWAY_API_URL is not configured');
     const res = await fetch(`${this.baseUrl}/merchants`, {
       headers: { Authorization: `Bearer ${this.publicKey}` },
     });
@@ -28,6 +29,7 @@ export class PaymentGatewayAdapter implements PaymentGatewayPort {
   }
 
   async charge(input: PaymentGatewayChargeInput): Promise<PaymentGatewayChargeResult> {
+    if (!this.baseUrl) throw new GatewayError('GATEWAY_API_URL is not configured');
     const acceptanceToken = await this.getAcceptanceToken();
 
     const res = await fetch(`${this.baseUrl}/transactions`, {

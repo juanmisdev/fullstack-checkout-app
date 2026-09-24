@@ -22,6 +22,7 @@ const chargeInput = {
 
 describe('PaymentGatewayAdapter', () => {
   beforeEach(() => {
+    process.env.GATEWAY_API_URL = 'https://payment-gateway-sandbox.example.com/v1';
     process.env.GATEWAY_PUBLIC_KEY = 'pub_test';
   });
 

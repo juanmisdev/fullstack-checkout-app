@@ -1,6 +1,6 @@
 // Thin controllers — ONLY HTTP protocol concerns. Zero business logic here.
 
-import { Body, Controller, Get, Injectable, NotFoundException, Param, Post } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, HttpException, Injectable, InternalServerErrorException, NotFoundException, Param, Post } from '@nestjs/common';
 import { IsEmail, IsInt, IsNotEmpty, IsPositive, Min } from 'class-validator';
 import { CheckoutService } from '../../application/services/checkout.service';
 import { CheckoutError } from '../../application/use-cases/checkout.use-case';
@@ -87,13 +87,7 @@ export class CheckoutController {
     });
 
     if (!result.ok) {
-      const err = result.error as CheckoutHttpError;
-      const status = mapErrorToHttpStatus(err);
-      return {
-        statusCode: status.code,
-        error: err.code ?? 'CHECKOUT_ERROR',
-        message: err.message,
-      };
+      throw mapErrorToException(result.error as CheckoutHttpError);
     }
     return { data: result.value };
   }
@@ -103,17 +97,23 @@ interface CheckoutHttpError extends Error {
   code?: string;
 }
 
-const mapErrorToHttpStatus = (err: CheckoutHttpError): { code: number } => {
+const mapErrorToException = (err: CheckoutHttpError): HttpException => {
   switch (err.code) {
     case 'INSUFFICIENT_STOCK':
-      return { code: 409 };
+      return new ConflictException(err.message);
     case 'PRODUCT_NOT_FOUND':
-      return { code: 404 };
+      return new NotFoundException(err.message);
     case 'PAYMENT_DECLINED':
-      return { code: 402 };
+      return new HttpException(
+        { statusCode: 402, error: 'PAYMENT_DECLINED', message: err.message },
+        402,
+      );
     case 'INVALID_CARD':
-      return { code: 422 };
+      return new HttpException(
+        { statusCode: 422, error: 'INVALID_CARD', message: err.message },
+        422,
+      );
     default:
-      return { code: 500 };
+      return new InternalServerErrorException(err.message);
   }
 };

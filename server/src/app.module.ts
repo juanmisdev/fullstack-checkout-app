@@ -77,7 +77,7 @@ export class AppModule {
         stock: 8,
       }),
       Product.create({
-        id: 'prod_002',
+        id: 'prod_003',
         name: 'Running Shoes',
         description: 'Lightweight running shoes with cushioned sole, unisex.',
         priceInCents: 320000,

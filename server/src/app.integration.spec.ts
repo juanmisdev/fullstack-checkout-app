@@ -41,9 +41,8 @@ describe('App (e2e)', () => {
 
     it('GET /api/v1/products lists the seeded products', async () => {
       const res = await request(app.getHttpServer()).get('/api/v1/products').expect(200);
-      // seed() keys a Map by id: the duplicated 'prod_002' entry collapses, so
-      // 3 seeded entries surface as 2 unique products (asserting actual behavior).
-      expect(res.body.data).toHaveLength(2);
+      // 3 seeded products: headphones (prod_001), keyboard (prod_002), shoes (prod_003).
+      expect(res.body.data).toHaveLength(3);
       expect(res.body.data[0].props).toMatchObject({ id: 'prod_001', name: 'Wireless Headphones', stock: 12 });
     });
 
@@ -94,11 +93,9 @@ describe('App (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/checkout')
         .send(checkoutPayload())
-        .expect(201); // controller maps Err to a plain object, so Nest responds 201 (POST default)
+        .expect(500); // controller throws InternalServerErrorException for gateway failures
 
-      // Actual controller behavior: { statusCode, error, message } body (not a Nest exception).
       expect(res.body.statusCode).toBe(500);
-      expect(res.body.error).toBe('CHECKOUT_ERROR');
       expect(res.body.message).toContain('Unexpected gateway failure');
       expect(res.body.data).toBeUndefined();
     });
