@@ -9,7 +9,7 @@ const PRODUCTS = [
     name: 'Wireless Headphones',
     description: 'Noise-cancelling over-ear wireless headphones, 30h battery life.',
     priceInCents: 250000,
-    imageUrl: 'https://picsum.photos/seed/headphones/600/600',
+    imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&h=600&fit=crop&auto=format',
     stock: 12,
   },
   {
@@ -17,7 +17,7 @@ const PRODUCTS = [
     name: 'Mechanical Keyboard',
     description: 'Hot-swappable 75% mechanical keyboard with RGB backlight.',
     priceInCents: 180000,
-    imageUrl: 'https://picsum.photos/seed/keyboard/600/600',
+    imageUrl: 'https://images.unsplash.com/photo-1541140532154-b024d705b90a?w=600&h=600&fit=crop&auto=format',
     stock: 8,
   },
   {
@@ -25,7 +25,7 @@ const PRODUCTS = [
     name: 'Running Shoes',
     description: 'Lightweight running shoes with cushioned sole, unisex.',
     priceInCents: 320000,
-    imageUrl: 'https://picsum.photos/seed/shoes/600/600',
+    imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&h=600&fit=crop&auto=format',
     stock: 15,
   },
 ];
