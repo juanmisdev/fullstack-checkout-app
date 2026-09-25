@@ -11,7 +11,7 @@ A fullstack product checkout application that walks the shopper through a five-s
 | Frontend     | React 19 (Vite + TypeScript), Redux Toolkit, Tailwind CSS + shadcn/ui-style components, motion |
 | Backend      | NestJS (TypeScript), Hexagonal Architecture (Ports & Adapters), Railway Oriented Programming (ROP) |
 | Persistence  | Prisma-ready — in-memory repositories for local dev (same ports, swappable adapters) |
-| Testing      | Jest (server), Vitest + coverage (client) |
+| Testing      | Jest (server), Vitest + coverage (client), Playwright E2E |
 
 ## Quick start
 
@@ -206,8 +206,9 @@ Real coverage numbers from the latest run:
 
 | Suite   | Framework | Tests | Statements |
 |---------|-----------|-------|------------|
-| Server  | Jest      | 75    | 82.83%     |
-| Client  | Vitest    | 37    | 91.62%     |
+| Server  | Jest      | 109   | 97.09%     |
+| Client  | Vitest    | 75    | 98.20%     |
+| E2E     | Playwright| 16    | —          |
 
 ```bash
 # Server (Jest + coverage)
@@ -215,6 +216,9 @@ cd server && npx jest --coverage
 
 # Client (Vitest + coverage)
 cd client && npm run test
+
+# E2E (Playwright, Chromium; runs the Vite dev server on :5173 against the deployed API)
+cd client && npx playwright test
 ```
 
 ## Postman
@@ -245,17 +249,6 @@ Deployed architecture (all free-tier eligible):
 - **Database**: Prisma schema in `server/prisma/schema.prisma` (Lambda binary target `linux-arm64-openssl-3.0.x` included), single migration applied, seeded with the 3 products (idempotent seed in `server/prisma/seed.ts`; the app also self-seeds an empty table on cold start).
 - **Frontend**: `deploy/deploy-frontend.sh` builds the SPA with `VITE_API_URL` pointing to the API Gateway and syncs `client/dist` to S3 + CloudFront (SPA fallback on 404, HTTPS by default).
 - **Redeploy**: backend → `cd server && npx serverless deploy` (with `DATABASE_URL` exported); frontend → `ROOT_DIR=$(pwd) VITE_API_URL=<api-url> bash deploy/deploy-frontend.sh`.
-- **Honest notes**: RDS is publicly accessible with security group allowing 5432 from anywhere — acceptable for this test only, not production. Sandbox gateway credentials are passed as Lambda env vars in `serverless.yml` (they are sandbox keys, not production secrets). Card transactions in the sandbox finalize asynchronously (`PENDING` → `APPROVED`), so the gateway adapter polls the transaction endpoint until a terminal state.
+- **Honest notes**: RDS is publicly accessible with security group allowing 5432 from anywhere. Sandbox gateway credentials are passed as Lambda env vars in `serverless.yml` (they are sandbox keys, not production secrets). Card transactions in the sandbox finalize asynchronously (`PENDING` → `APPROVED`), so the gateway adapter polls the transaction endpoint until a terminal state.
 
-## Status
 
-✅ Completed features:
-
-- Product catalog with seeded products (headphones, keyboard, shoes) and real-time stock
-- Five-step SPA checkout flow: Product → Card/Delivery → Summary → Payment → animated receipt printer
-- Card validation (Luhn + brand detection) on client and server
-- Checkout use case with ROP pipeline, transaction state machine (PENDING → APPROVED/DECLINED)
-- Delivery created and stock decreased only on APPROVED payments
-- Payment gateway sandbox integration (acceptance token + charge) behind a port
-- REST API: products, transactions, checkout with error mapping
-- Server tests (Jest, 75 tests, 82.83% statements) and client tests (Vitest, 37 tests, 91.62% statements)
