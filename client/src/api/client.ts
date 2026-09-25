@@ -98,7 +98,8 @@ export const buildCheckoutRequest = (
     number: card.number,
     cvv: card.cvv,
     expiryMonth: Number(card.expiryMonth),
-    expiryYear: Number(card.expiryYear),
+    // Normalize 2-digit years (YY) to full year (20YY) before sending.
+    expiryYear: Number(card.expiryYear) < 100 ? 2000 + Number(card.expiryYear) : Number(card.expiryYear),
     holderName: card.holderName,
   },
   customer: {

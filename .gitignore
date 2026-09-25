@@ -18,3 +18,7 @@ coverage/
 .atl/
 odd/
 openspec/
+
+# serverless build artifacts
+.serverless/
+*.tsbuildinfo

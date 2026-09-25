@@ -223,11 +223,21 @@ cd client && npm run test
 - **Credentials only via environment**: gateway keys are read from `process.env` (`GATEWAY_API_URL`, `GATEWAY_PUBLIC_KEY`); `.env` files are never committed (see `server/.env.example`).
 - **Validation on both sides**: Luhn checksum and brand detection (Visa/Mastercard) run on the client for instant feedback, and card validation is enforced again in the server's pure domain (`card-validator.ts`).
 
-## Deployment (documented plan)
+## Deployment (live on AWS, region us-east-1)
 
-- **SPA (`client/`)** — static build deployed to **Amazon S3**, served through **CloudFront** with SPA routing fallback (`index.html`), HTTPS via ACM certificate.
-- **API (`server/`)** — containerized and deployed to **Amazon ECS (Fargate)**, or as Lambda functions behind API Gateway for lower traffic; environment variables injected via AWS Secrets Manager / SSM Parameter Store.
-- **Persistence** — swap the in-memory adapters for the Prisma adapters backed by **RDS PostgreSQL**; the hexagonal ports make this a configuration-level change, not a code rewrite.
+Deployed architecture (all free-tier eligible):
+
+| Component | Service | URL / identifier |
+|---|---|---|
+| SPA | S3 + CloudFront | https://d30is68sphf1e9.cloudfront.net (dist. `E711RYV9D8JJS`, bucket `checkout-spa-33971295360`) |
+| API | Lambda (nodejs20.x, arm64, 1024MB) + API Gateway HTTP API | https://dp2txvb8v8.execute-api.us-east-1.amazonaws.com/api/v1 |
+| Database | RDS PostgreSQL (db.t4g.micro, public access + SG on 5432) | `checkout-db.c4ngk6200fhh.us-east-1.rds.amazonaws.com` |
+
+- **Backend**: deployed with the Serverless Framework (`server/serverless.yml`), handler in `server/src/lambda.ts` (`@vendia/serverless-express` wrapping the Nest app). Persistence switches automatically to the Prisma adapters via `PERSISTENCE_DRIVER=prisma` (in-memory adapters are kept for local dev and tests — the hexagonal ports did not change).
+- **Database**: Prisma schema in `server/prisma/schema.prisma` (Lambda binary target `linux-arm64-openssl-3.0.x` included), single migration applied, seeded with the 3 products (idempotent seed in `server/prisma/seed.ts`; the app also self-seeds an empty table on cold start).
+- **Frontend**: `deploy/deploy-frontend.sh` builds the SPA with `VITE_API_URL` pointing to the API Gateway and syncs `client/dist` to S3 + CloudFront (SPA fallback on 404, HTTPS by default).
+- **Redeploy**: backend → `cd server && npx serverless deploy` (with `DATABASE_URL` exported); frontend → `ROOT_DIR=$(pwd) VITE_API_URL=<api-url> bash deploy/deploy-frontend.sh`.
+- **Honest notes**: RDS is publicly accessible with security group allowing 5432 from anywhere — acceptable for this test only, not production. Sandbox gateway credentials are passed as Lambda env vars in `serverless.yml` (they are sandbox keys, not production secrets). Card transactions in the sandbox finalize asynchronously (`PENDING` → `APPROVED`), so the gateway adapter polls the transaction endpoint until a terminal state.
 
 ## Status
 
@@ -242,4 +252,4 @@ cd client && npm run test
 - REST API: products, transactions, checkout with error mapping
 - Server tests (Jest, 75 tests, 93.87% statements) and client tests (Vitest, 37 tests, 91.62% statements)
 
-🚧 Future work: Prisma/PostgreSQL persistence adapters, Postman collection, CI pipeline.
+🚧 Future work: Postman collection, CI pipeline, production-hardening (RDS in private VPC, secrets in SSM, ACM custom domain).
