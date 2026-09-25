@@ -25,6 +25,8 @@ export interface CheckoutInput {
   /** Base fee added always, configured at API level (cents). */
   baseFeeInCents: number;
   deliveryFeeInCents: number;
+  /** Optional: when provided and already known, the existing transaction outcome is returned (idempotent retries). */
+  idempotencyKey?: string;
 }
 
 export interface CheckoutOutput {
@@ -56,6 +58,14 @@ export class CheckoutUseCase {
   ) {}
 
   async execute(input: CheckoutInput): Promise<Result<CheckoutOutput, CheckoutError>> {
+    // 0. Idempotency: reuse an existing transaction for the same key instead of
+    // charging again (safe retries / double submits of the same attempt).
+    if (input.idempotencyKey) {
+      const existing = await attemptAsync(() => this.transactionRepo.findById(input.idempotencyKey!));
+      if (!existing.ok) return Err(existing.error);
+      if (existing.value) return Ok(this.outputFromTransaction(existing.value));
+    }
+
     // 1. Validate card structure (pure domain, fail fast)
     const cardCheck = await attemptAsync(async () => {
       validateCard(input.card);
@@ -77,8 +87,9 @@ export class CheckoutUseCase {
     const customerSave = await attemptAsync(() => this.customerRepo.save(customer));
     if (!customerSave.ok) return Err(customerSave.error);
 
-    // 4. Create PENDING transaction
-    const transactionId = this.idGenerator.generate();
+    // 4. Create PENDING transaction. With an idempotency key the transaction id
+    // IS the key, so retries of the same attempt map onto this same row.
+    const transactionId = input.idempotencyKey ?? this.idGenerator.generate();
     const transaction = Transaction.createPending({
       id: transactionId,
       productRef: product.id,
@@ -135,6 +146,20 @@ export class CheckoutUseCase {
         deliveryRef: transaction.id,
       },
     });
+  }
+
+  /** Maps a stored transaction back to the checkout output shape (idempotent replays). */
+  private outputFromTransaction(tx: Transaction): CheckoutOutput {
+    return {
+      transactionId: tx.id,
+      status: tx.status === 'APPROVED' ? 'APPROVED' : 'DECLINED',
+      totalInCents: tx.totalInCents(),
+      receipt: {
+        productRef: tx.props.productRef,
+        customerRef: tx.props.customerRef,
+        deliveryRef: tx.id,
+      },
+    };
   }
 
   private async chargeGateway(

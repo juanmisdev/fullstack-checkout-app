@@ -76,7 +76,7 @@ describe('App', () => {
 
     store.dispatch(startCheckout({ productId: 'prod_001', units: 1 }));
     store.dispatch(saveCardAndDelivery({ card, delivery }));
-    store.dispatch(submitPayment());
+    store.dispatch(submitPayment({ idempotencyKey: 'idem-test-1' }));
 
     render(
       <Provider store={store}>
@@ -89,9 +89,34 @@ describe('App', () => {
     expect(payload.card.number).toBe('4242424242424242');
     expect(payload.customer.email).toBe('john@example.com');
     expect(payload.deliveryFeeInCents).toBe(10000);
+    expect(payload.idempotencyKey).toBe('idem-test-1');
 
     await waitFor(() => expect(store.getState().checkout.transactionStatus).toBe('APPROVED'));
     expect(store.getState().checkout.step).toBe('result');
+  });
+
+  it('runs the checkout request without an idempotency key when none was stored', async () => {
+    checkoutMock.mockResolvedValue({
+      transactionId: 'tx_3',
+      status: 'APPROVED',
+      totalInCents: 260500,
+    });
+
+    store.dispatch(startCheckout({ productId: 'prod_001', units: 1 }));
+    store.dispatch(saveCardAndDelivery({ card, delivery }));
+    store.dispatch(submitPayment({ idempotencyKey: 'idem-test-2' }));
+    // Simulate an older persisted flow restored without the key.
+    store.dispatch({ type: 'checkout/restoreState', payload: { idempotencyKey: null } });
+
+    render(
+      <Provider store={store}>
+        <App />
+      </Provider>,
+    );
+
+    await waitFor(() => expect(checkoutMock).toHaveBeenCalledTimes(1));
+    expect(checkoutMock.mock.calls[0][0].idempotencyKey).toBeUndefined();
+    await waitFor(() => expect(store.getState().checkout.transactionStatus).toBe('APPROVED'));
   });
 
   it('dispatches paymentFailed when the checkout request throws', async () => {
@@ -99,7 +124,7 @@ describe('App', () => {
 
     store.dispatch(startCheckout({ productId: 'prod_001', units: 1 }));
     store.dispatch(saveCardAndDelivery({ card, delivery }));
-    store.dispatch(submitPayment());
+    store.dispatch(submitPayment({ idempotencyKey: 'idem-test-3' }));
 
     render(
       <Provider store={store}>
@@ -116,7 +141,7 @@ describe('App', () => {
 
     store.dispatch(startCheckout({ productId: 'prod_001', units: 1 }));
     store.dispatch(saveCardAndDelivery({ card, delivery }));
-    store.dispatch(submitPayment());
+    store.dispatch(submitPayment({ idempotencyKey: 'idem-test-4' }));
 
     render(
       <Provider store={store}>

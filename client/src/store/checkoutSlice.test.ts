@@ -23,6 +23,7 @@ const initialState: CheckoutState = {
   transactionId: null,
   transactionStatus: null,
   totalInCents: null,
+  idempotencyKey: null,
   error: null,
 };
 
@@ -74,13 +75,24 @@ describe('checkoutSlice', () => {
     expect(state.delivery).toEqual(delivery);
   });
 
-  it('submitPayment moves to processing and clears the error', () => {
+  it('submitPayment stores the idempotency key, moves to processing and clears the error', () => {
     const started = checkoutReducer(initialState, startCheckout({ productId: 'prod_001', units: 1 }));
     const summarized = checkoutReducer(started, saveCardAndDelivery({ card, delivery }));
-    const state = checkoutReducer(summarized, submitPayment());
+    const state = checkoutReducer(summarized, submitPayment({ idempotencyKey: 'idem-1' }));
 
     expect(state.step).toBe('processing');
+    expect(state.idempotencyKey).toBe('idem-1');
     expect(state.error).toBeNull();
+  });
+
+  it('backToProduct resets the idempotency key together with the transient data', () => {
+    const started = checkoutReducer(initialState, startCheckout({ productId: 'prod_001', units: 1 }));
+    const summarized = checkoutReducer(started, saveCardAndDelivery({ card, delivery }));
+    const processing = checkoutReducer(summarized, submitPayment({ idempotencyKey: 'idem-1' }));
+    const state = checkoutReducer(processing, backToProduct());
+
+    expect(state.step).toBe('product');
+    expect(state.idempotencyKey).toBeNull();
   });
 
   it('paymentSucceeded stores the transaction and moves to result', () => {

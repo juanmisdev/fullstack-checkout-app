@@ -15,14 +15,45 @@ interface PersistedSafeState {
   totalInCents?: number | null;
 }
 
+/**
+ * Decides which persisted step can be safely restored.
+ * Restorable steps and their required fields:
+ * - 'card-delivery': delivery present
+ * - 'summary'/'processing' (mapped to summary): cardMeta + delivery
+ * - 'result': cardMeta + delivery + transactionId + transactionStatus + totalInCents
+ * Anything else (incoherent state) falls back to 'product', keeping product selection.
+ */
+const restorableStep = (
+  safe: PersistedSafeState,
+): { step: CheckoutState['step']; hasCardMeta: boolean } => {
+  const hasCardMeta = typeof (safe as { cardMeta?: unknown }).cardMeta === 'object' && (safe as { cardMeta?: unknown }).cardMeta !== null;
+  const hasDelivery = safe.delivery !== null && safe.delivery !== undefined;
+  const hasResult =
+    hasCardMeta && hasDelivery &&
+    !!safe.transactionId && !!safe.transactionStatus && typeof safe.totalInCents === 'number';
+
+  switch (safe.step) {
+    case 'card-delivery':
+      return hasDelivery ? { step: 'card-delivery', hasCardMeta } : { step: 'product', hasCardMeta };
+    case 'summary':
+    case 'processing':
+      return hasCardMeta && hasDelivery ? { step: 'summary', hasCardMeta } : { step: 'product', hasCardMeta };
+    case 'result':
+      return hasResult ? { step: 'result', hasCardMeta } : { step: 'product', hasCardMeta };
+    default:
+      return { step: 'product', hasCardMeta };
+  }
+};
+
 /** Loads persisted flow progress. Sensitive card data is NOT restored (only metadata). */
 export const loadPersistedState = (): Partial<CheckoutState> | null => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const safe = JSON.parse(raw) as PersistedSafeState;
-    // If a transaction was in flight (processing), resume at summary view.
-    const step = safe.step === 'processing' ? 'summary' : (safe.step ?? 'product');
+    // Downgrade incoherent states: a step is only restored when the fields it
+    // needs were persisted too (e.g. 'summary' without cardMeta -> 'product').
+    const { step } = restorableStep(safe);
     return {
       step,
       productId: safe.productId ?? null,

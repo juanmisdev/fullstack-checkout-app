@@ -27,6 +27,8 @@ export interface CheckoutRequest {
   customer: { fullName: string; email: string; phone: string };
   delivery: { address: string; city: string; postalCode: string };
   deliveryFeeInCents: number;
+  /** Optional: safe to retry the same attempt (backend dedups on it). */
+  idempotencyKey?: string;
 }
 
 export const DELIVERY_FEE_IN_CENTS = 10000; // delivery fee (cents)
@@ -98,6 +100,7 @@ export const buildCheckoutRequest = (
   units: number,
   card: CardState,
   delivery: DeliveryState,
+  idempotencyKey?: string,
 ): CheckoutRequest => ({
   productId,
   units,
@@ -120,4 +123,5 @@ export const buildCheckoutRequest = (
     postalCode: delivery.postalCode,
   },
   deliveryFeeInCents: DELIVERY_FEE_IN_CENTS,
+  ...(idempotencyKey ? { idempotencyKey } : {}),
 });

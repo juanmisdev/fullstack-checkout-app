@@ -29,6 +29,7 @@ export interface CheckoutState {
   transactionId: string | null;
   transactionStatus: 'APPROVED' | 'DECLINED' | null;
   totalInCents: number | null;
+  idempotencyKey: string | null;
   error: string | null;
 }
 
@@ -41,6 +42,7 @@ const initialState: CheckoutState = {
   transactionId: null,
   transactionStatus: null,
   totalInCents: null,
+  idempotencyKey: null,
   error: null,
 };
 
@@ -82,8 +84,9 @@ const checkoutSlice = createSlice({
       state.step = 'summary';
       persistSafeState(state);
     },
-    submitPayment(state) {
+    submitPayment(state, action: PayloadAction<{ idempotencyKey: string }>) {
       state.step = 'processing';
+      state.idempotencyKey = action.payload.idempotencyKey;
       state.error = null;
       persistSafeState(state);
     },
@@ -110,6 +113,7 @@ const checkoutSlice = createSlice({
       state.transactionId = null;
       state.transactionStatus = null;
       state.totalInCents = null;
+      state.idempotencyKey = null;
       state.error = null;
       persistSafeState(state);
     },

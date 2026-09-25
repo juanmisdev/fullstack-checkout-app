@@ -28,6 +28,7 @@ function CheckoutFlow() {
           checkoutState.units,
           checkoutState.card!,
           checkoutState.delivery!,
+          checkoutState.idempotencyKey ?? undefined,
         );
         const result = await checkoutApi(request);
         if (cancelled) return;

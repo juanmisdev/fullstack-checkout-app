@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { SummaryPage } from './SummaryPage';
 import { store } from '@/store';
-import { startCheckout, saveCardAndDelivery, submitPayment, type CardState, type DeliveryState } from '@/store/checkoutSlice';
+import { startCheckout, saveCardAndDelivery, submitPayment, backToSummary, type CardState, type DeliveryState } from '@/store/checkoutSlice';
 
 const card: CardState = {
   number: '4242424242424242',
@@ -83,7 +83,26 @@ describe('SummaryPage', () => {
     // App is not mounted here, so no network call happens in this test.
   });
 
-  it('Back returns to the summary step context', async () => {
+  it('shows a processing state on the Pay button and disables the actions while processing', () => {
+    store.dispatch({ type: 'checkout/backToProduct' });
+    store.dispatch(startCheckout({ productId: 'prod_001', units: 1 }));
+    store.dispatch(saveCardAndDelivery({ card, delivery }));
+    store.dispatch(submitPayment({ idempotencyKey: 'idem-test-1' }));
+
+    render(
+      <Provider store={store}>
+        <SummaryPage />
+      </Provider>,
+    );
+
+    const payButton = screen.getByRole('button', { name: /processing payment/i });
+    expect(payButton).toBeDisabled();
+    expect(payButton).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+  });
+
+  it('Back is disabled while processing and returns to summary otherwise', async () => {
     const user = userEvent.setup();
     render(
       <Provider store={store}>
@@ -91,7 +110,10 @@ describe('SummaryPage', () => {
       </Provider>,
     );
     await user.click(screen.getByRole('button', { name: 'Pay now' }));
-    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+    expect(store.getState().checkout.step).toBe('processing');
+
+    store.dispatch(backToSummary());
     expect(store.getState().checkout.step).toBe('summary');
     void submitPayment;
   });

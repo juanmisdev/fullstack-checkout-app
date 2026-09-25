@@ -1,7 +1,7 @@
 // Thin controllers — ONLY HTTP protocol concerns. Zero business logic here.
 
+import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Min } from 'class-validator';
 import { Body, ConflictException, Controller, Get, HttpException, Injectable, InternalServerErrorException, NotFoundException, Param, Post } from '@nestjs/common';
-import { IsEmail, IsInt, IsNotEmpty, IsPositive, Min } from 'class-validator';
 import { CheckoutService } from '../../application/services/checkout.service';
 import { CheckoutError } from '../../application/use-cases/checkout.use-case';
 
@@ -33,7 +33,8 @@ export class CheckoutRequestDto {
   card!: CardDto;
   customer!: CustomerDto;
   delivery!: DeliveryDto;
-  deliveryFeeInCents!: number;
+  @IsInt() @IsPositive() deliveryFeeInCents!: number;
+  @IsOptional() @IsString() idempotencyKey?: string;
 }
 
 // --- DTO mappers (entities -> plain API payloads; keeps the HTTP contract flat) ---
@@ -91,6 +92,7 @@ export class CheckoutController {
       delivery: dto.delivery,
       deliveryFeeInCents: dto.deliveryFeeInCents,
       baseFeeInCents: 0, // service applies the configured base fee
+      ...(dto.idempotencyKey ? { idempotencyKey: dto.idempotencyKey } : {}),
     });
 
     if (!result.ok) {

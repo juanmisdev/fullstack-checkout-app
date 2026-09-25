@@ -123,4 +123,60 @@ describe('CheckoutUseCase', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.message).toContain('Unexpected gateway failure');
   });
+
+  it('reuses the existing transaction when idempotencyKey matches', async () => {
+    let chargeCalls = 0;
+    const countingGateway: PaymentGatewayPort = {
+      charge: async () => {
+        chargeCalls += 1;
+        return { ok: true, gatewayTransactionId: 'gw_idem', status: 'APPROVED' as const };
+      },
+    };
+    const { useCase, productRepo } = setup({ gateway: countingGateway });
+
+    const first = await useCase.execute({ ...validInput, idempotencyKey: 'test-idem-001' });
+    const second = await useCase.execute({ ...validInput, idempotencyKey: 'test-idem-001' });
+
+    expect(chargeCalls).toBe(1); // only ONE gateway charge for the same key
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(second.value.transactionId).toBe(first.value.transactionId);
+      expect(second.value.status).toBe(first.value.status);
+      expect(second.value.totalInCents).toBe(first.value.totalInCents);
+    }
+    // Idempotent replay must not decrease stock twice
+    const updatedProduct = await productRepo.findById('prod_001');
+    expect(updatedProduct?.stock).toBe(8); // 10 - 2 units, once
+  });
+
+  it('treats different idempotencyKeys as different attempts (charges again)', async () => {
+    let chargeCalls = 0;
+    const countingGateway: PaymentGatewayPort = {
+      charge: async () => {
+        chargeCalls += 1;
+        return { ok: true, gatewayTransactionId: 'gw_' + chargeCalls, status: 'APPROVED' as const };
+      },
+    };
+    const { useCase } = setup({ gateway: countingGateway });
+
+    await useCase.execute({ ...validInput, idempotencyKey: 'key-A' });
+    await useCase.execute({ ...validInput, idempotencyKey: 'key-B' });
+    expect(chargeCalls).toBe(2);
+  });
+
+  it('stays backwards compatible without idempotencyKey', async () => {
+    let chargeCalls = 0;
+    const countingGateway: PaymentGatewayPort = {
+      charge: async () => {
+        chargeCalls += 1;
+        return { ok: true, gatewayTransactionId: 'gw_' + chargeCalls, status: 'APPROVED' as const };
+      },
+    };
+    const { useCase } = setup({ gateway: countingGateway });
+
+    await useCase.execute(validInput);
+    await useCase.execute(validInput); // no key: two independent attempts
+    expect(chargeCalls).toBe(2);
+  });
 });
