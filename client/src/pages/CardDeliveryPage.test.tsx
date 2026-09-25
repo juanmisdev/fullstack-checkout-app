@@ -1,12 +1,12 @@
 // Component tests — CardDeliveryDialog validation and dispatch.
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { CardDeliveryDialog } from './CardDeliveryPage';
 import { store } from '@/store';
-import { startCheckout } from '@/store/checkoutSlice';
+import { startCheckout, restoreState } from '@/store/checkoutSlice';
 
 const fillValidForm = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.type(screen.getByLabelText('Card number'), '4242424242424242');
@@ -33,10 +33,13 @@ describe('CardDeliveryDialog', () => {
   beforeEach(() => {
     localStorage.clear();
     store.dispatch({ type: 'checkout/backToProduct' });
+    // backToProduct does not clear delivery; a previous test's saveCardAndDelivery
+    // would otherwise prefill the dialog fields and corrupt later typing.
+    store.dispatch(restoreState({ delivery: null }));
     store.dispatch(startCheckout({ productId: 'prod_001', units: 1 }));
   });
 
-  it('rejects an invalid card number with inline error feedback', async () => {
+  it('rejects an invalid card number: button stays disabled and nothing is dispatched', async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.type(screen.getByLabelText('Card number'), '4242424242424241');
@@ -52,9 +55,9 @@ describe('CardDeliveryDialog', () => {
     await user.type(screen.getByLabelText('Postal code'), '110111');
 
     const submit = screen.getByRole('button', { name: /continue to summary/i });
+    expect(submit).toBeDisabled();
     await user.click(submit);
 
-    expect(await screen.findByText('Invalid card number')).toBeInTheDocument();
     expect(store.getState().checkout.card).toBeNull();
   });
 
@@ -85,5 +88,81 @@ describe('CardDeliveryDialog', () => {
     renderDialog();
     await user.type(screen.getByLabelText('Card number'), '4242424242424242');
     expect(screen.getByLabelText('Card number')).toHaveValue('4242 4242 4242 4242');
+  });
+
+  it('disables the submit button while the form is empty and untouched', () => {
+    renderDialog();
+    expect(screen.getByRole('button', { name: /continue to summary/i })).toBeDisabled();
+  });
+
+  it('enables the submit button once every field is valid', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    const submit = screen.getByRole('button', { name: /continue to summary/i });
+    expect(submit).toBeDisabled();
+    await fillValidForm(user);
+    expect(submit).toBeEnabled();
+  });
+
+  it('shows the error message after a valid submit is degraded, and clears it once fixed', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await fillValidForm(user);
+
+    // onOpenChange is a stub, so the dialog stays mounted after submit and
+    // `touched` remains true — degrading a field now surfaces the message.
+    await user.click(screen.getByRole('button', { name: /continue to summary/i }));
+    await user.clear(screen.getByLabelText('CVV'));
+
+    expect(await screen.findByText('Please complete all fields correctly')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('CVV'), '123');
+    expect(screen.queryByText('Please complete all fields correctly')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue to summary/i })).toBeEnabled();
+  });
+
+  it('syncs autofilled DOM values into React state (self-healing timer)', async () => {
+    const user = userEvent.setup();
+    vi.useFakeTimers();
+    renderDialog();
+
+    // Simulate browser autofill: set DOM values directly WITHOUT input events,
+    // exactly like Chrome autofill does. React state must stay empty here.
+    const autofill = (label: string, value: string) => {
+      const input = screen.getByLabelText(label) as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(input, value);
+    };
+    autofill('Card number', '4242424242424242');
+    autofill('CVV', '123');
+    autofill('Month', '12');
+    autofill('Year', '29');
+    autofill('Cardholder name', 'John Doe');
+    autofill('Full name', 'John Doe');
+    autofill('Email', 'john@example.com');
+    autofill('Phone', '+573001234567');
+    autofill('Address', 'Calle 1 #2-3');
+    autofill('City', 'Bogota');
+    autofill('Postal code', '110111');
+
+    const submit = screen.getByRole('button', { name: /continue to summary/i });
+    expect(submit).toBeDisabled();
+
+    // The dialog's self-healing sync runs at 300ms and 1000ms after open.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    vi.useRealTimers();
+
+    // State healed from the DOM: formatting applied, button enabled.
+    expect(submit).toBeEnabled();
+    expect(screen.getByLabelText('Card number')).toHaveValue('4242 4242 4242 4242');
+    expect(screen.getByLabelText('Cardholder name')).toHaveValue('JOHN DOE');
+
+    await user.click(submit);
+    await waitFor(() => {
+      expect(store.getState().checkout.card?.number).toBe('4242 4242 4242 4242');
+      expect(store.getState().checkout.delivery?.email).toBe('john@example.com');
+    });
   });
 });

@@ -1,7 +1,7 @@
 // Screen 2 — Credit card + delivery info modal with client-side validation
 // (Luhn check, VISA/MasterCard brand logos detection).
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,50 @@ const formatCardNumber = (raw: string): string =>
     .replace(/(.{4})/g, '$1 ')
     .trim();
 
+// Browser autofill (Chrome, password managers) can set input values without
+// firing input/change events, leaving React state stale while the DOM looks
+// complete. React's onAnimationStart workaround is unreliable under React 19 +
+// jsdom, so instead we self-heal: after the dialog opens, re-read every input's
+// DOM value through the same normalizers used by onChange. Runs twice (300ms,
+// 1000ms) to cover early and late autofill, and only writes back when the DOM
+// actually differs from state so real typing is never clobbered.
+const syncFromDom = (
+  card: CardState,
+  delivery: DeliveryState,
+  setCard: (c: CardState) => void,
+  setDelivery: (d: DeliveryState) => void,
+): boolean => {
+  const read = (id: string): string =>
+    (document.getElementById(id) as HTMLInputElement | null)?.value ?? '';
+  const nextCard: CardState = {
+    number: formatCardNumber(read('card-number')),
+    cvv: read('cvv').replace(/\D/g, ''),
+    expiryMonth: read('exp-month').replace(/\D/g, ''),
+    expiryYear: read('exp-year').replace(/\D/g, ''),
+    holderName: read('holder').toUpperCase(),
+  };
+  const nextDelivery: DeliveryState = {
+    fullName: read('full-name'),
+    email: read('email'),
+    phone: read('phone'),
+    address: read('address'),
+    city: read('city'),
+    postalCode: read('postal'),
+  };
+  // Only sync when the DOM actually differs from React state — that gap is
+  // exactly what autofill-without-events creates. Normal typing keeps them in
+  // step (controlled inputs), so this can never clobber real user input.
+  const cardDiffers = (Object.keys(nextCard) as (keyof CardState)[]).some(
+    (k) => nextCard[k] !== card[k],
+  );
+  const deliveryDiffers = (Object.keys(nextDelivery) as (keyof DeliveryState)[]).some(
+    (k) => nextDelivery[k] !== delivery[k],
+  );
+  if (cardDiffers) setCard(nextCard);
+  if (deliveryDiffers) setDelivery(nextDelivery);
+  return cardDiffers || deliveryDiffers;
+};
+
 export function CardDeliveryDialog({
   open,
   onOpenChange,
@@ -58,6 +102,19 @@ export function CardDeliveryDialog({
     postalCode: deliverySaved?.postalCode ?? '',
   });
   const [touched, setTouched] = useState(false);
+
+  const cardRef = useRef(card);
+  const deliveryRef = useRef(delivery);
+  cardRef.current = card;
+  deliveryRef.current = delivery;
+
+  useEffect(() => {
+    if (!open) return;
+    const run = () =>
+      syncFromDom(cardRef.current, deliveryRef.current, (c) => setCard(c), (d) => setDelivery(d));
+    const timers = [setTimeout(run, 300), setTimeout(run, 1000)];
+    return () => timers.forEach(clearTimeout);
+  }, [open]);
 
   const brand = detectBrand(card.number);
   const numberValid = isValidLuhn(card.number);
@@ -251,7 +308,7 @@ export function CardDeliveryDialog({
             </div>
           </fieldset>
 
-          <Button className="w-full" size="lg" onClick={submit} disabled={!formValid && touched}>
+          <Button className="w-full" size="lg" onClick={submit} disabled={!formValid}>
             Continue to summary
           </Button>
           {touched && !formValid && (
