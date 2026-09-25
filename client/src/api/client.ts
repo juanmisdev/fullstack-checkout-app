@@ -32,6 +32,13 @@ export interface CheckoutRequest {
 export const DELIVERY_FEE_IN_CENTS = 10000; // delivery fee (cents)
 export const BASE_FEE_IN_CENTS = 500; // base fee added always (cents)
 
+export async function fetchProducts(): Promise<ProductDto[]> {
+  const res = await fetch(`${API_BASE}/products`);
+  if (!res.ok) throw new Error(`Failed to load products (${res.status})`);
+  const body = (await res.json()) as { data: ProductDto[] };
+  return body.data;
+}
+
 export async function fetchProduct(id: string): Promise<ProductDto> {
   const res = await fetch(`${API_BASE}/products/${id}`);
   if (!res.ok) throw new Error(`Failed to load product (${res.status})`);

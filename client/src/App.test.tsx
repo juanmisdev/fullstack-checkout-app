@@ -11,13 +11,13 @@ vi.mock('@/api/client', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/api/client')>();
   return {
     ...mod,
-    fetchProduct: vi.fn(),
+    fetchProducts: vi.fn(),
     checkout: vi.fn(),
   };
 });
 
-import { fetchProduct, checkout } from '@/api/client';
-const fetchProductMock = vi.mocked(fetchProduct);
+import { fetchProducts, checkout } from '@/api/client';
+const fetchProductsMock = vi.mocked(fetchProducts);
 const checkoutMock = vi.mocked(checkout);
 
 const product = {
@@ -51,7 +51,7 @@ describe('App', () => {
     localStorage.clear();
     store.dispatch({ type: 'checkout/backToProduct' });
     vi.clearAllMocks();
-    fetchProductMock.mockResolvedValue(product);
+    fetchProductsMock.mockResolvedValue([product]);
   });
 
   afterEach(() => {

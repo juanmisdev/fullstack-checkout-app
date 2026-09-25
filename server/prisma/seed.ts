@@ -40,6 +40,7 @@ async function main() {
         description: product.description,
         priceInCents: product.priceInCents,
         imageUrl: product.imageUrl,
+        stock: product.stock,
       },
       create: product,
     });

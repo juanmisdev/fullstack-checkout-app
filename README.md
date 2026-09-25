@@ -221,6 +221,8 @@ cd client && npm run test
 
 A ready-to-import Postman collection covering all API endpoints (list/get product, get transaction, and 4 checkout scenarios: approved, insufficient stock 409, invalid card 422, unknown product 404) lives at [`docs/checkout-api.postman_collection.json`](docs/checkout-api.postman_collection.json). In Postman: **Import → File → select the JSON** — the `api_base_url` variable defaults to the deployed API.
 
+Prefer running it in the browser? The collection is also published as a [Public Postman workspace (run in browser)](https://www.postman.com/joint-operations-physicist-99448915-s-team/w-challenge/run/create?collection=33409500-b426c553-aa11-4325-b51e-95c7a69e1d6d&type=manual-run&tab=functional&sideView=agentMode) — open the link and run the requests directly against the deployed API (may require a free Postman login).
+
 ## Security notes
 
 - **Card data is never persisted raw**: only derived, non-sensitive metadata (last 4 digits inside the sandbox tokenization step and holder name) is used; the full PAN never reaches the repositories. Honest note: card tokenization happens **server-side** in sandbox mode — the PAN travels over HTTPS to the API and is never stored; in production, tokenization would happen client-side via the gateway's JS SDK so the PAN never touches our servers at all.
@@ -257,5 +259,3 @@ Deployed architecture (all free-tier eligible):
 - Payment gateway sandbox integration (acceptance token + charge) behind a port
 - REST API: products, transactions, checkout with error mapping
 - Server tests (Jest, 75 tests, 82.83% statements) and client tests (Vitest, 37 tests, 91.62% statements)
-
-🚧 Future work: CI pipeline, production-hardening (RDS in private VPC, secrets in SSM, ACM custom domain).
