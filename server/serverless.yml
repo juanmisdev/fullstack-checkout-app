@@ -24,7 +24,16 @@ provider:
     PERSISTENCE_DRIVER: prisma
     DATABASE_URL: ${env:DATABASE_URL, ''}
   httpApi:
-    cors: true
+    cors:
+      allowedOrigins:
+        - 'https://d30is68sphf1e9.cloudfront.net'
+        - 'http://localhost:5173'
+        - 'http://localhost:3000'
+      allowedMethods:
+        - GET
+        - POST
+      allowedHeaders:
+        - Content-Type
     payload: '2.0'
 
 package:
@@ -36,6 +45,7 @@ package:
     - 'node_modules/.prisma/**'
     - 'node_modules/@prisma/client/**'
     - 'node_modules/@vendia/**'
+    - 'node_modules/helmet/**'
     - '!node_modules/.cache/**'
     - '!node_modules/.bin/**'
     - '!node_modules/*/node_modules/.bin/**'

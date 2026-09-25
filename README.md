@@ -2,7 +2,7 @@
 
 A fullstack product checkout application that walks the shopper through a five-step flow: **Product** (browse and pick a product) → **Card/Delivery** (enter payment and shipping details) → **Summary** (review the breakdown of amount, base fee, delivery fee and total) → **Payment** (charge via the sandbox payment gateway) → **Receipt** (an animated printer prints the transaction receipt), with stock updated in real time on the backend.
 
-> API documentation lives in this README (see the [API endpoints](#api-endpoints) section). A Postman collection is planned as future work.
+> API documentation lives in this README (see the [API endpoints](#api-endpoints) section), plus a ready-to-import [Postman collection](docs/checkout-api.postman_collection.json).
 
 ## Stack
 
@@ -206,7 +206,7 @@ Real coverage numbers from the latest run:
 
 | Suite   | Framework | Tests | Statements |
 |---------|-----------|-------|------------|
-| Server  | Jest      | 75    | 93.87%     |
+| Server  | Jest      | 75    | 82.83%     |
 | Client  | Vitest    | 37    | 91.62%     |
 
 ```bash
@@ -217,9 +217,15 @@ cd server && npx jest --coverage
 cd client && npm run test
 ```
 
+## Postman
+
+A ready-to-import Postman collection covering all API endpoints (list/get product, get transaction, and 4 checkout scenarios: approved, insufficient stock 409, invalid card 422, unknown product 404) lives at [`docs/checkout-api.postman_collection.json`](docs/checkout-api.postman_collection.json). In Postman: **Import → File → select the JSON** — the `api_base_url` variable defaults to the deployed API.
+
 ## Security notes
 
-- **Card data is never persisted raw**: only derived, non-sensitive metadata (last 4 digits inside the sandbox tokenization step and holder name) is used; the full PAN never reaches the repositories.
+- **Card data is never persisted raw**: only derived, non-sensitive metadata (last 4 digits inside the sandbox tokenization step and holder name) is used; the full PAN never reaches the repositories. Honest note: card tokenization happens **server-side** in sandbox mode — the PAN travels over HTTPS to the API and is never stored; in production, tokenization would happen client-side via the gateway's JS SDK so the PAN never touches our servers at all.
+- **OWASP security headers**: the API applies `helmet` on every response (HSTS, `X-Content-Type-Options: nosniff`, CSP, `X-Frame-Options`, etc.) and the Express signature (`x-powered-by`) is disabled.
+- **Explicit CORS allowlist**: both the Lambda/Nest layer and API Gateway only allow the CloudFront SPA origin and localhost dev origins — no wildcard CORS.
 - **Credentials only via environment**: gateway keys are read from `process.env` (`GATEWAY_API_URL`, `GATEWAY_PUBLIC_KEY`); `.env` files are never committed (see `server/.env.example`).
 - **Validation on both sides**: Luhn checksum and brand detection (Visa/Mastercard) run on the client for instant feedback, and card validation is enforced again in the server's pure domain (`card-validator.ts`).
 
@@ -250,6 +256,6 @@ Deployed architecture (all free-tier eligible):
 - Delivery created and stock decreased only on APPROVED payments
 - Payment gateway sandbox integration (acceptance token + charge) behind a port
 - REST API: products, transactions, checkout with error mapping
-- Server tests (Jest, 75 tests, 93.87% statements) and client tests (Vitest, 37 tests, 91.62% statements)
+- Server tests (Jest, 75 tests, 82.83% statements) and client tests (Vitest, 37 tests, 91.62% statements)
 
-🚧 Future work: Postman collection, CI pipeline, production-hardening (RDS in private VPC, secrets in SSM, ACM custom domain).
+🚧 Future work: CI pipeline, production-hardening (RDS in private VPC, secrets in SSM, ACM custom domain).

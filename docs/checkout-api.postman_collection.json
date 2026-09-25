@@ -1,0 +1,143 @@
+{
+  "info": {
+    "_postman_id": "b7e2f1a0-4c3d-4e5f-8a9b-0c1d2e3f4a5b",
+    "name": "Checkout API",
+    "description": "REST API for the fullstack checkout app (products, checkout and transactions). Set `api_base_url` at the collection level to point at any environment (default: deployed API Gateway).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "api_base_url",
+      "value": "https://dp2txvb8v8.execute-api.us-east-1.amazonaws.com/api/v1"
+    }
+  ],
+  "item": [
+    {
+      "name": "List products",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{api_base_url}}/products",
+          "host": ["{{api_base_url}}"],
+          "path": ["products"]
+        }
+      }
+    },
+    {
+      "name": "Get product",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{api_base_url}}/products/prod_001",
+          "host": ["{{api_base_url}}"],
+          "path": ["products", "prod_001"]
+        }
+      }
+    },
+    {
+      "name": "Get transaction",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{api_base_url}}/transactions/:transactionId",
+          "host": ["{{api_base_url}}"],
+          "path": ["transactions", ":transactionId"],
+          "variable": [
+            {
+              "key": "transactionId",
+              "value": "tx_example_ba87v6as"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Checkout — approved",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"prod_001\",\n  \"units\": 1,\n  \"card\": {\n    \"number\": \"4242 4242 4242 4242\",\n    \"cvv\": \"123\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 29,\n    \"holderName\": \"JOHN DOE\"\n  },\n  \"customer\": {\n    \"fullName\": \"John Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"phone\": \"+573001234567\"\n  },\n  \"delivery\": {\n    \"address\": \"Calle 1 #2-3\",\n    \"city\": \"Bogota\",\n    \"postalCode\": \"110111\"\n  },\n  \"deliveryFeeInCents\": 10000\n}"
+        },
+        "url": {
+          "raw": "{{api_base_url}}/checkout",
+          "host": ["{{api_base_url}}"],
+          "path": ["checkout"]
+        },
+        "description": "Happy path. The gateway sandbox approves card 4242 4242 4242 4242. `deliveryFeeInCents` must match the value used by the web client (10000 = $100.00)."
+      }
+    },
+    {
+      "name": "Checkout — insufficient stock (409)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"prod_001\",\n  \"units\": 99,\n  \"card\": {\n    \"number\": \"4242 4242 4242 4242\",\n    \"cvv\": \"123\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 29,\n    \"holderName\": \"JOHN DOE\"\n  },\n  \"customer\": {\n    \"fullName\": \"John Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"phone\": \"+573001234567\"\n  },\n  \"delivery\": {\n    \"address\": \"Calle 1 #2-3\",\n    \"city\": \"Bogota\",\n    \"postalCode\": \"110111\"\n  },\n  \"deliveryFeeInCents\": 10000\n}"
+        },
+        "url": {
+          "raw": "{{api_base_url}}/checkout",
+          "host": ["{{api_base_url}}"],
+          "path": ["checkout"]
+        },
+        "description": "Requests more units than available stock. Returns 409 Conflict."
+      }
+    },
+    {
+      "name": "Checkout — invalid card (422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"prod_001\",\n  \"units\": 1,\n  \"card\": {\n    \"number\": \"4242 4242 4242 4241\",\n    \"cvv\": \"123\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 29,\n    \"holderName\": \"JOHN DOE\"\n  },\n  \"customer\": {\n    \"fullName\": \"John Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"phone\": \"+573001234567\"\n  },\n  \"delivery\": {\n    \"address\": \"Calle 1 #2-3\",\n    \"city\": \"Bogota\",\n    \"postalCode\": \"110111\"\n  },\n  \"deliveryFeeInCents\": 10000\n}"
+        },
+        "url": {
+          "raw": "{{api_base_url}}/checkout",
+          "host": ["{{api_base_url}}"],
+          "path": ["checkout"]
+        },
+        "description": "Card fails domain validation (checksum/expiry). Returns 422 with error INVALID_CARD."
+      }
+    },
+    {
+      "name": "Checkout — unknown product (404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"prod_XXX\",\n  \"units\": 1,\n  \"card\": {\n    \"number\": \"4242 4242 4242 4242\",\n    \"cvv\": \"123\",\n    \"expiryMonth\": 12,\n    \"expiryYear\": 29,\n    \"holderName\": \"JOHN DOE\"\n  },\n  \"customer\": {\n    \"fullName\": \"John Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"phone\": \"+573001234567\"\n  },\n  \"delivery\": {\n    \"address\": \"Calle 1 #2-3\",\n    \"city\": \"Bogota\",\n    \"postalCode\": \"110111\"\n  },\n  \"deliveryFeeInCents\": 10000\n}"
+        },
+        "url": {
+          "raw": "{{api_base_url}}/checkout",
+          "host": ["{{api_base_url}}"],
+          "path": ["checkout"]
+        },
+        "description": "Unknown productId. Returns 404 Not Found."
+      }
+    }
+  ]
+}
