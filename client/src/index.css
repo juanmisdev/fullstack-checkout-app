@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Tailwind v4 preflight sets cursor: default on buttons; restore pointer
+   affordance for interactive elements. */
+button,
+[role="button"],
+select,
+input[type="checkbox"],
+input[type="radio"],
+label,
+a {
+  cursor: pointer;
+}
+
 :root {
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;

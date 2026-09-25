@@ -157,7 +157,7 @@ export function CardDeliveryDialog({
                   inputMode="numeric"
                   autoComplete="cc-exp-year"
                   placeholder="YY"
-                  maxLength={4}
+                  maxLength={2}
                   value={card.expiryYear}
                   onChange={(e) => setCard({ ...card, expiryYear: e.target.value.replace(/\D/g, '') })}
                   className={showFieldError(!expiryValid) ? 'border-destructive' : ''}
