@@ -15,9 +15,11 @@ provider:
   architecture: arm64
   environment:
     STAGE: ${sls:stage}
-    GATEWAY_API_URL: https://api-sandbox.co.uat.wompi.dev/v1
-    GATEWAY_PUBLIC_KEY: pub_stagtest_g2u0HQd3ZMh05hsSgTS2lUV8t3s4mOt7
-    GATEWAY_INTEGRITY_KEY: stagtest_integrity_nAIBuqayW70XpUqJS4qf4STYiISd89Fp
+    # Gateway base URL and sandbox keys are injected at deploy time (NOT committed
+    # to the repo). Pass them via the shell environment when running `serverless deploy`.
+    GATEWAY_API_URL: ${env:GATEWAY_API_URL, ''}
+    GATEWAY_PUBLIC_KEY: ${env:GATEWAY_PUBLIC_KEY, ''}
+    GATEWAY_INTEGRITY_KEY: ${env:GATEWAY_INTEGRITY_KEY, ''}
     GATEWAY_RAW_CARD_TOKENIZATION: 'true'
     PERSISTENCE_DRIVER: prisma
     DATABASE_URL: ${env:DATABASE_URL, ''}
