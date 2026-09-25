@@ -6,6 +6,7 @@ import { Customer, Delivery } from '../../domain/customers/customer.entity';
 
 export interface ProductRepositoryPort {
   findById(id: string): Promise<Product | null>;
+  list(): Promise<Product[]>;
   decreaseStock(id: string, units: number): Promise<Product>;
 }
 
@@ -37,6 +38,14 @@ export interface PaymentGatewayChargeInput {
   customerEmail: string;
   cardToken: string;
   reference: string;
+  /** Optional raw card for gateways that require server-side tokenization. */
+  rawCard?: {
+    number: string;
+    cvv: string;
+    expiryMonth: number;
+    expiryYear: number;
+    holderName: string;
+  };
 }
 
 export type PaymentGatewayChargeResult = {

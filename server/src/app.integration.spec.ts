@@ -43,12 +43,12 @@ describe('App (e2e)', () => {
       const res = await request(app.getHttpServer()).get('/api/v1/products').expect(200);
       // 3 seeded products: headphones (prod_001), keyboard (prod_002), shoes (prod_003).
       expect(res.body.data).toHaveLength(3);
-      expect(res.body.data[0].props).toMatchObject({ id: 'prod_001', name: 'Wireless Headphones', stock: 12 });
+      expect(res.body.data[0]).toMatchObject({ id: 'prod_001', name: 'Wireless Headphones', stock: 12 });
     });
 
     it('GET /api/v1/products/prod_001 returns the product', async () => {
       const res = await request(app.getHttpServer()).get('/api/v1/products/prod_001').expect(200);
-      expect(res.body.data.props).toMatchObject({ id: 'prod_001', name: 'Wireless Headphones', stock: 12 });
+      expect(res.body.data).toMatchObject({ id: 'prod_001', name: 'Wireless Headphones', stock: 12 });
     });
 
     it('GET /api/v1/products/nope returns 404', async () => {

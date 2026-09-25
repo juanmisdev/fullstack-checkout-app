@@ -1,0 +1,75 @@
+# Serverless deployment config — Lambda + API Gateway HTTP API, Node.js 20.x.
+# Sandbox gateway credentials (NOT production secrets) are passed as plain env vars.
+# DATABASE_URL is provided at deploy time via --set-env or an env var in the shell.
+
+service: checkout-api
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'prod'}
+  memorySize: 1024
+  timeout: 15
+  architecture: arm64
+  environment:
+    STAGE: ${sls:stage}
+    GATEWAY_API_URL: https://api-sandbox.co.uat.wompi.dev/v1
+    GATEWAY_PUBLIC_KEY: pub_stagtest_g2u0HQd3ZMh05hsSgTS2lUV8t3s4mOt7
+    GATEWAY_INTEGRITY_KEY: stagtest_integrity_nAIBuqayW70XpUqJS4qf4STYiISd89Fp
+    GATEWAY_RAW_CARD_TOKENIZATION: 'true'
+    PERSISTENCE_DRIVER: prisma
+    DATABASE_URL: ${env:DATABASE_URL, ''}
+  httpApi:
+    cors: true
+    payload: '2.0'
+
+package:
+  individually: false
+  patterns:
+    - '!**'
+    - 'dist/**'
+    - '!dist/**/*.map'
+    - 'node_modules/.prisma/**'
+    - 'node_modules/@prisma/client/**'
+    - 'node_modules/@vendia/**'
+    - '!node_modules/.cache/**'
+    - '!node_modules/.bin/**'
+    - '!node_modules/*/node_modules/.bin/**'
+
+functions:
+  api:
+    handler: dist/lambda.handler
+    events:
+      - httpApi:
+          path: /api/v1/{proxy+}
+          method: any
+      - httpApi:
+          path: /api/v1
+          method: any
+
+plugins:
+  - serverless-esbuild
+
+custom:
+  esbuild:
+    bundle: true
+    external:
+      - '@prisma/client'
+      - '.prisma'
+      - '@vendia/serverless-express'
+      - '@nestjs/common'
+      - '@nestjs/core'
+      - '@nestjs/platform-express'
+      - 'reflect-metadata'
+      - 'rxjs'
+      - 'class-transformer'
+      - 'class-validator'
+    exclude:
+      - 'src/*'
+      - 'prisma/*'
+      - 'test/*'
+    sourcemap: false
+    target: node20
+    minify: false

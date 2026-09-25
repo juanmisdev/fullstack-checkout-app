@@ -3,9 +3,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { CheckoutUseCase, CheckoutInput, CheckoutOutput, CheckoutError } from '../use-cases/checkout.use-case';
 import { Result } from '../../domain/shared/result';
-import { InMemoryProductRepository } from '../../infrastructure/persistence/in-memory.repositories';
-import { IdGeneratorPort, TransactionRepositoryPort } from '../ports/ports';
-import { ID_GENERATOR, TRANSACTION_REPOSITORY } from '../ports/tokens';
+import { ProductRepositoryPort, IdGeneratorPort, TransactionRepositoryPort } from '../ports/ports';
+import { ID_GENERATOR, PRODUCT_REPOSITORY, TRANSACTION_REPOSITORY } from '../ports/tokens';
 
 export const BASE_FEE_IN_CENTS = 500; // base fee added always
 
@@ -13,7 +12,7 @@ export const BASE_FEE_IN_CENTS = 500; // base fee added always
 export class CheckoutService {
   constructor(
     private readonly checkoutUseCase: CheckoutUseCase,
-    private readonly productRepo: InMemoryProductRepository,
+    @Inject(PRODUCT_REPOSITORY) private readonly productRepo: ProductRepositoryPort,
     @Inject(TRANSACTION_REPOSITORY) private readonly transactionRepo: TransactionRepositoryPort,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGeneratorPort,
   ) {}

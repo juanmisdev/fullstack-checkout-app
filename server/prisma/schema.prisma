@@ -1,0 +1,54 @@
+// Prisma schema — mirrors the hexagonal domain entities exactly.
+// Lambda target: nodejs20.x needs the RHEL OpenSSL 3 engine binary.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id           String @id
+  name         String
+  description  String
+  priceInCents Int
+  imageUrl     String
+  stock        Int
+}
+
+model Transaction {
+  id                   String   @id
+  productRef           String
+  customerRef          String
+  amountInCents        Int
+  baseFeeInCents       Int
+  deliveryFeeInCents   Int
+  status               String
+  gatewayTransactionId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model Customer {
+  id        String   @id
+  fullName  String
+  email     String
+  phone     String
+  createdAt DateTime @default(now())
+}
+
+model Delivery {
+  id            String   @id
+  transactionRef String
+  customerRef   String
+  productRef    String
+  address       String
+  city          String
+  postalCode    String
+  status        String   @default("CREATED")
+  createdAt     DateTime @default(now())
+}

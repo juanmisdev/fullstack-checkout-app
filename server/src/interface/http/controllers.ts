@@ -36,6 +36,12 @@ export class CheckoutRequestDto {
   deliveryFeeInCents!: number;
 }
 
+// --- DTO mappers (entities -> plain API payloads; keeps the HTTP contract flat) ---
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const toDto = (entity: any): unknown =>
+  entity && typeof entity === 'object' && 'props' in entity ? { ...entity.props } : entity;
+
 // --- Controllers ---
 
 @Controller('products')
@@ -45,14 +51,15 @@ export class ProductsController {
 
   @Get()
   async list() {
-    return { data: await this.checkoutService.listProducts() };
+    const products = await this.checkoutService.listProducts();
+    return { data: products.map(toDto) };
   }
 
   @Get(':id')
   async get(@Param('id') id: string) {
     const product = await this.checkoutService.getProduct(id);
     if (!product) throw new NotFoundException('Product not found');
-    return { data: product };
+    return { data: toDto(product) };
   }
 }
 
@@ -65,7 +72,7 @@ export class TransactionsController {
   async get(@Param('id') id: string) {
     const tx = await this.checkoutService.getTransaction(id);
     if (!tx) throw new NotFoundException('Transaction not found');
-    return { data: tx };
+    return { data: toDto(tx) };
   }
 }
 

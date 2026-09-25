@@ -14,6 +14,10 @@ export interface ProductProps {
 export class Product {
   private constructor(readonly props: ProductProps) {}
 
+  static fromPersistence(props: ProductProps): Product {
+    return new Product({ ...props });
+  }
+
   static create(props: ProductProps): Product {
     Product.assertValid(props);
     return new Product({ ...props });

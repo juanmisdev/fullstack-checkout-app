@@ -96,6 +96,7 @@ describe('CheckoutUseCase', () => {
     const declinedCase = new CheckoutUseCase(
       {
         findById: async () => product,
+        list: async () => [product],
         decreaseStock: async () => product,
       },
       txRepo,

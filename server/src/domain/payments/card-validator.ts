@@ -1,5 +1,7 @@
 // Card validation domain service — Luhn check + brand detection (VISA / MasterCard).
 
+import { InvalidCardError } from '../shared/errors';
+
 export type CardBrand = 'VISA' | 'MASTERCARD' | 'UNKNOWN';
 
 export interface CardData {
@@ -49,15 +51,17 @@ export const last4 = (rawNumber: string): string =>
 
 /** Validates full card data (structure + expiry + luhn). Throws on invalid. */
 export const validateCard = (card: CardData): void => {
-  if (!isValidLuhn(card.number)) throw new Error('Invalid card number');
-  if (detectBrand(card.number) === 'UNKNOWN') throw new Error('Only VISA and MasterCard are accepted');
-  if (!/^\d{3,4}$/.test(card.cvv)) throw new Error('Invalid CVV');
+  if (!isValidLuhn(card.number)) throw new InvalidCardError('Invalid card number');
+  if (detectBrand(card.number) === 'UNKNOWN') throw new InvalidCardError('Only VISA and MasterCard are accepted');
+  if (!/^\d{3,4}$/.test(card.cvv)) throw new InvalidCardError('Invalid CVV');
   const now = new Date();
   const currentYear = now.getFullYear();
-  if (card.expiryYear < currentYear) throw new Error('Card expired');
-  if (card.expiryYear === currentYear && card.expiryMonth < now.getMonth() + 1) {
-    throw new Error('Card expired');
+  // Normalize 2-digit years (YY -> 20YY) for tolerant clients.
+  const expiryYear = card.expiryYear < 100 ? 2000 + card.expiryYear : card.expiryYear;
+  if (expiryYear < currentYear) throw new InvalidCardError('Card expired');
+  if (expiryYear === currentYear && card.expiryMonth < now.getMonth() + 1) {
+    throw new InvalidCardError('Card expired');
   }
-  if (card.expiryMonth < 1 || card.expiryMonth > 12) throw new Error('Invalid expiry month');
-  if (!card.holderName.trim()) throw new Error('Holder name is required');
+  if (card.expiryMonth < 1 || card.expiryMonth > 12) throw new InvalidCardError('Invalid expiry month');
+  if (!card.holderName.trim()) throw new InvalidCardError('Holder name is required');
 };

@@ -140,7 +140,7 @@ export class CheckoutUseCase {
   private async chargeGateway(
     transaction: Transaction,
     email: string,
-    card: { number: string; cvv: string; holderName: string },
+    card: { number: string; cvv: string; expiryMonth: number; expiryYear: number; holderName: string },
   ): Promise<Result<PaymentGatewayChargeResultOf, GatewayError | PaymentDeclinedError>> {
     try {
       const result = await this.paymentGateway.charge({
@@ -148,6 +148,7 @@ export class CheckoutUseCase {
         customerEmail: email,
         cardToken: cardTokenFrom(card),
         reference: transaction.id,
+        rawCard: card,
       });
       return Ok(result);
     } catch (e) {

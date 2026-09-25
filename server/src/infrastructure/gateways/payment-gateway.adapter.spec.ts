@@ -85,7 +85,8 @@ describe('PaymentGatewayAdapter', () => {
     await expect(adapter().charge(chargeInput)).rejects.toThrow(GatewayError);
   });
 
-  it('throws GatewayError on unexpected status', async () => {
+  it('polls PENDING transactions and throws on non-terminal state', async () => {
+    const pendingBody = { data: { id: 'gw_3', status: 'PENDING' } };
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
@@ -95,8 +96,14 @@ describe('PaymentGatewayAdapter', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 201,
-        json: async () => ({ data: { id: 'gw_3', status: 'PENDING' } }),
+        json: async () => pendingBody,
+      })
+      // All poll attempts keep returning PENDING.
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => pendingBody,
       });
     await expect(adapter().charge(chargeInput)).rejects.toThrow('Unexpected gateway status: PENDING');
-  });
+  }, 15000);
 });
