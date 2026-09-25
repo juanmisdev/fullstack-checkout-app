@@ -2,6 +2,7 @@
 // for resilience on refresh (test requirement).
 
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import { detectBrand } from '@/api/client';
 
 export interface CardState {
   number: string;
@@ -58,7 +59,11 @@ const persistSafeState = (state: CheckoutState): void => {
     transactionStatus: state.transactionStatus,
     totalInCents: state.totalInCents,
     cardMeta: state.card
-      ? { last4: state.card.number.replace(/\D/g, '').slice(-4), holderName: state.card.holderName }
+      ? {
+          last4: state.card.number.replace(/\D/g, '').slice(-4),
+          holderName: state.card.holderName,
+          brand: detectBrand(state.card.number),
+        }
       : null,
   };
   try {

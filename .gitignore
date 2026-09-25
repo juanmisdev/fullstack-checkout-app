@@ -10,6 +10,9 @@ coverage/
 .env
 .env.*
 !.env.example
+# .env.development is committed: it only carries the public deployed API URL
+# (no secrets); local overrides go in .env.development.local (still ignored).
+!client/.env.development
 
 # misc
 .DS_Store
@@ -22,3 +25,7 @@ openspec/
 # serverless build artifacts
 .serverless/
 *.tsbuildinfo
+
+# playwright local artifacts
+test-results/
+playwright-report/

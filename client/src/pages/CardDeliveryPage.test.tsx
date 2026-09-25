@@ -1,7 +1,7 @@
 // Component tests — CardDeliveryDialog validation and dispatch.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { CardDeliveryDialog } from './CardDeliveryPage';
@@ -164,5 +164,60 @@ describe('CardDeliveryDialog', () => {
       expect(store.getState().checkout.card?.number).toBe('4242 4242 4242 4242');
       expect(store.getState().checkout.delivery?.email).toBe('john@example.com');
     });
+  });
+});
+describe('CardDeliveryDialog dismissal resilience', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    store.dispatch({ type: 'checkout/backToProduct' });
+    store.dispatch(restoreState({ delivery: null }));
+    store.dispatch(startCheckout({ productId: 'prod_001', units: 1 }));
+  });
+
+  it('stays open when dismissed by Escape or outside click (accidental dismissal)', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    // Radix fires onEscapeKeyDown / onInteractOutside before onOpenChange;
+    // the dialog must preventDefault them so typed card data survives.
+    await user.type(screen.getByLabelText('Card number'), '4242');
+    screen.getByLabelText('Card number').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    fireEvent.focusOut(screen.getByLabelText('Card number'));
+
+    // Dialog still mounted and typed digits are intact.
+    expect(screen.getByLabelText('Card number')).toHaveValue('4242');
+  });
+
+  it('explicit close via onOpenChange(false) fires without submitting (host steps back to product)', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <Provider store={store}>
+        <CardDeliveryDialog open onOpenChange={onOpenChange} />
+      </Provider>,
+    );
+    // Radix Dialog's Close (X) button triggers onOpenChange(false).
+    await user.click(screen.getByText('Close'));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(store.getState().checkout.step).toBe('card-delivery');
+  });
+
+  it('calls onSaved (not just onOpenChange) when the form submits successfully', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const onSaved = vi.fn();
+    render(
+      <Provider store={store}>
+        <CardDeliveryDialog open onOpenChange={onOpenChange} onSaved={onSaved} />
+      </Provider>,
+    );
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /continue to summary/i }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(store.getState().checkout.step).toBe('summary');
+    expect(store.getState().checkout.card?.number).toBe('4242 4242 4242 4242');
   });
 });

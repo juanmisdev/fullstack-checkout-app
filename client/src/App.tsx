@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { backToSummary } from '@/store/checkoutSlice';
+import { backToProduct } from '@/store/checkoutSlice';
 import { checkout as checkoutApi } from '@/api/client';
 import { ProductPage } from '@/pages/ProductPage';
 import { SummaryPage } from '@/pages/SummaryPage';
@@ -54,7 +54,24 @@ function CheckoutFlow() {
     case 'card-delivery':
       return (
         <div className="p-4">
-          <CardDeliveryDialog open onOpenChange={() => dispatch(backToSummary())} />
+          <CardDeliveryDialog
+            open
+            // Explicit Close (X): step back to product cleanly. Accidental
+            // dismissal (Escape/outside click) is blocked inside the dialog.
+            // A close arriving after a successful submit is ignored: the submit
+            // already advanced the step to 'summary' (checked via thunk state).
+            onOpenChange={(next) => {
+              if (!next) {
+                dispatch((_dispatch, getState) => {
+                  if (getState().checkout.step === 'card-delivery') {
+                    _dispatch(backToProduct());
+                  }
+                });
+              }
+            }}
+            // Successful submit already advanced the step to 'summary'.
+            onSaved={() => undefined}
+          />
         </div>
       );
     case 'summary':

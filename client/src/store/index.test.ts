@@ -28,7 +28,7 @@ describe('store rehydration', () => {
     });
   });
 
-  it('loadPersistedState downgrades a persisted processing step to summary', async () => {
+  it('downgrades a persisted processing step to product (card data is not persisted)', async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -40,7 +40,7 @@ describe('store rehydration', () => {
       }),
     );
     const mod = await import('./index');
-    expect(mod.loadPersistedState()).toMatchObject({ step: 'summary', transactionId: 'tx_9' });
+    expect(mod.loadPersistedState()).toMatchObject({ step: 'product', transactionId: 'tx_9' });
   });
 
   it('downgrades summary/processing without cardMeta to product', async () => {
@@ -99,7 +99,7 @@ describe('store rehydration', () => {
     expect(mod.loadPersistedState()).toBeNull();
   });
 
-  it('restores persisted progress into the store at import time', async () => {
+  it('downgrades summary/processing to product (card data required, never persisted)', async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -113,7 +113,7 @@ describe('store rehydration', () => {
     vi.resetModules();
     const mod = await import('./index');
     const state = mod.store.getState().checkout;
-    expect(state.step).toBe('summary');
+    expect(state.step).toBe('product');
     expect(state.productId).toBe('prod_001');
     expect(state.units).toBe(3);
   });

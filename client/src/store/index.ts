@@ -19,9 +19,10 @@ interface PersistedSafeState {
  * Decides which persisted step can be safely restored.
  * Restorable steps and their required fields:
  * - 'card-delivery': delivery present
- * - 'summary'/'processing' (mapped to summary): cardMeta + delivery
  * - 'result': cardMeta + delivery + transactionId + transactionStatus + totalInCents
- * Anything else (incoherent state) falls back to 'product', keeping product selection.
+ * 'summary'/'processing' are NOT restorable: rendering the summary (and paying)
+ * requires the full card object, which is intentionally never persisted
+ * (sensitive data). Anything else (incoherent state) falls back to 'product'.
  */
 const restorableStep = (
   safe: PersistedSafeState,
@@ -35,9 +36,6 @@ const restorableStep = (
   switch (safe.step) {
     case 'card-delivery':
       return hasDelivery ? { step: 'card-delivery', hasCardMeta } : { step: 'product', hasCardMeta };
-    case 'summary':
-    case 'processing':
-      return hasCardMeta && hasDelivery ? { step: 'summary', hasCardMeta } : { step: 'product', hasCardMeta };
     case 'result':
       return hasResult ? { step: 'result', hasCardMeta } : { step: 'product', hasCardMeta };
     default:

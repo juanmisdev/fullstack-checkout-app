@@ -79,9 +79,13 @@ const syncFromDom = (
 export function CardDeliveryDialog({
   open,
   onOpenChange,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called after card+delivery were saved (step already advanced). Lets the
+   * host close the dialog without triggering its "explicit close" behavior. */
+  onSaved?: () => void;
 }) {
   const dispatch = useAppDispatch();
   const deliverySaved = useAppSelector((s) => s.checkout.delivery);
@@ -140,15 +144,26 @@ export function CardDeliveryDialog({
     setTouched(true);
     if (!formValid) return;
     dispatch(saveCardAndDelivery({ card, delivery }));
+    onSaved?.();
     onOpenChange(false);
   };
+
+  // Accidental dismissal (Escape, outside click, focus-out) must NOT close the
+  // dialog: typed card data lives in local state and would be lost. Only the
+  // explicit Close (X) button or a successful submit dismisses it.
+  const blockDismissal = (e: Event) => e.preventDefault();
 
   // `errorCondition` is the per-field invalidity expression (e.g. !numberValid).
   const showFieldError = (errorCondition: boolean) => touched && errorCondition;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] max-w-md overflow-y-auto">
+      <DialogContent
+        className="max-h-[90dvh] max-w-md overflow-y-auto"
+        onEscapeKeyDown={blockDismissal}
+        onInteractOutside={blockDismissal}
+        onFocusOutside={blockDismissal}
+      >
         <DialogHeader>
           <DialogTitle>Payment details</DialogTitle>
           <DialogDescription>Enter your card and delivery information.</DialogDescription>
