@@ -1,5 +1,11 @@
 // Screen 2 — Credit card + delivery info modal with client-side validation
 // (Luhn check, VISA/MasterCard brand logos detection).
+//
+// UX contract (Vercel Web Interface Guidelines): the submit button is never
+// disabled by form validity — a disabled button on an invalid form is a dead
+// end with zero feedback. Instead, submitting an invalid form marks the form
+// touched, reveals inline per-field errors, moves focus to the first invalid
+// field, and announces the count via a polite live region.
 
 import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -31,6 +37,14 @@ const formatCardNumber = (raw: string): string =>
     .slice(0, 16)
     .replace(/(.{4})/g, '$1 ')
     .trim();
+
+const errorId = (inputId: string): string => `${inputId}-error`;
+
+const FieldError = ({ inputId, message }: { inputId: string; message: string }) => (
+  <p id={errorId(inputId)} className="text-xs text-destructive">
+    {message}
+  </p>
+);
 
 // Browser autofill (Chrome, password managers) can set input values without
 // firing input/change events, leaving React state stale while the DOM looks
@@ -120,32 +134,76 @@ export function CardDeliveryDialog({
     return () => timers.forEach(clearTimeout);
   }, [open]);
 
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
   const brand = detectBrand(card.number);
   const numberValid = isValidLuhn(card.number);
   const cvvValid = /^\d{3,4}$/.test(card.cvv);
-  const expiryValid =
+  // Month and year validity are split so each field can show its own error
+  // message (they previously shared one `expiryValid`).
+  const monthValid =
     /^\d{2}$/.test(card.expiryMonth) &&
     Number(card.expiryMonth) >= 1 &&
-    Number(card.expiryMonth) <= 12 &&
-    /^\d{2,4}$/.test(card.expiryYear);
+    Number(card.expiryMonth) <= 12;
+  // Year: format (2–4 digits) + semantic expiry, mirroring the server's
+  // card-validator normalization (2-digit YY becomes 20YY). '12' is 2012 —
+  // format-valid but expired; the client now catches what the server rejects.
+  const yearFormatValid = /^\d{2,4}$/.test(card.expiryYear);
+  const normalizedYear = yearFormatValid
+    ? Number(card.expiryYear) < 100
+      ? 2000 + Number(card.expiryYear)
+      : Number(card.expiryYear)
+    : null;
+  const yearExpired =
+    monthValid &&
+    normalizedYear !== null &&
+    (normalizedYear < currentYear ||
+      (normalizedYear === currentYear && Number(card.expiryMonth) < currentMonth));
+  const yearValid = yearFormatValid && !yearExpired;
   const holderValid = card.holderName.trim().length > 2;
+  const fullNameValid = delivery.fullName.trim().length > 2;
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(delivery.email);
-  const deliveryValid =
-    delivery.fullName.trim().length > 2 &&
-    emailValid &&
-    delivery.phone.trim().length > 5 &&
-    delivery.address.trim().length > 4 &&
-    delivery.city.trim().length > 2 &&
-    delivery.postalCode.trim().length > 2;
+  const phoneValid = delivery.phone.trim().length > 5;
+  const addressValid = delivery.address.trim().length > 4;
+  const cityValid = delivery.city.trim().length > 2;
+  const postalValid = delivery.postalCode.trim().length > 2;
 
-  const formValid = numberValid && cvvValid && expiryValid && holderValid && deliveryValid;
+  // Declaration order = DOM/focus order on a failed submit.
+  const fieldValidity: Array<[string, boolean]> = [
+    ['card-number', numberValid],
+    ['cvv', cvvValid],
+    ['exp-month', monthValid],
+    ['exp-year', yearValid],
+    ['holder', holderValid],
+    ['full-name', fullNameValid],
+    ['email', emailValid],
+    ['phone', phoneValid],
+    ['address', addressValid],
+    ['city', cityValid],
+    ['postal', postalValid],
+  ];
+  const formValid = fieldValidity.every(([, valid]) => valid);
+  const invalidCount = fieldValidity.filter(([, valid]) => !valid).length;
 
   const submit = () => {
     setTouched(true);
-    if (!formValid) return;
+    if (!formValid) {
+      // Always-enabled submit: reveal every per-field error and put the
+      // caret on the first invalid field so the user knows exactly what to fix.
+      const firstInvalid = fieldValidity.find(([, valid]) => !valid)?.[0];
+      if (firstInvalid) document.getElementById(firstInvalid)?.focus();
+      return;
+    }
     dispatch(saveCardAndDelivery({ card, delivery }));
     onSaved?.();
     onOpenChange(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    submit();
   };
 
   // Accidental dismissal (Escape, outside click, focus-out) must NOT close the
@@ -154,6 +212,8 @@ export function CardDeliveryDialog({
   const blockDismissal = (e: Event) => e.preventDefault();
 
   // `errorCondition` is the per-field invalidity expression (e.g. !numberValid).
+  // Errors stay hidden until the first submit attempt so pristine fields are
+  // never flagged (the always-enabled button guarantees the attempt happens).
   const showFieldError = (errorCondition: boolean) => touched && errorCondition;
 
   return (
@@ -169,7 +229,7 @@ export function CardDeliveryDialog({
           <DialogDescription>Enter your card and delivery information.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           {/* Card section */}
           <fieldset className="space-y-3">
             <legend className="text-sm font-semibold">Credit card</legend>
@@ -179,11 +239,15 @@ export function CardDeliveryDialog({
               <div className="relative">
                 <Input
                   id="card-number"
+                  name="cardNumber"
                   inputMode="numeric"
+                  spellCheck={false}
                   autoComplete="cc-number"
                   placeholder="4242 4242 4242 4242"
                   value={card.number}
                   onChange={(e) => setCard({ ...card, number: formatCardNumber(e.target.value) })}
+                  aria-invalid={showFieldError(!numberValid) || undefined}
+                  aria-describedby={showFieldError(!numberValid) ? errorId('card-number') : undefined}
                   className={showFieldError(!numberValid) ? 'border-destructive' : ''}
                 />
                 {brand !== 'UNKNOWN' && (
@@ -192,7 +256,9 @@ export function CardDeliveryDialog({
                   </span>
                 )}
               </div>
-              {showFieldError(!numberValid) && <p className="text-xs text-destructive">Invalid card number</p>}
+              {showFieldError(!numberValid) && (
+                <FieldError inputId="card-number" message="Enter a valid 16-digit card number (Luhn check)" />
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -200,40 +266,64 @@ export function CardDeliveryDialog({
                 <Label htmlFor="cvv">CVV</Label>
                 <Input
                   id="cvv"
+                  name="cvv"
                   inputMode="numeric"
+                  spellCheck={false}
                   autoComplete="cc-csc"
                   placeholder="123"
                   maxLength={4}
                   value={card.cvv}
                   onChange={(e) => setCard({ ...card, cvv: e.target.value.replace(/\D/g, '') })}
+                  aria-invalid={showFieldError(!cvvValid) || undefined}
+                  aria-describedby={showFieldError(!cvvValid) ? errorId('cvv') : undefined}
                   className={showFieldError(!cvvValid) ? 'border-destructive' : ''}
                 />
+                {showFieldError(!cvvValid) && (
+                  <FieldError inputId="cvv" message="CVV is the 3–4 digit code on the back" />
+                )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="exp-month">Month</Label>
                 <Input
                   id="exp-month"
+                  name="expiryMonth"
                   inputMode="numeric"
+                  spellCheck={false}
                   autoComplete="cc-exp-month"
                   placeholder="MM"
                   maxLength={2}
                   value={card.expiryMonth}
                   onChange={(e) => setCard({ ...card, expiryMonth: e.target.value.replace(/\D/g, '') })}
-                  className={showFieldError(!expiryValid) ? 'border-destructive' : ''}
+                  aria-invalid={showFieldError(!monthValid) || undefined}
+                  aria-describedby={showFieldError(!monthValid) ? errorId('exp-month') : undefined}
+                  className={showFieldError(!monthValid) ? 'border-destructive' : ''}
                 />
+                {showFieldError(!monthValid) && (
+                  <FieldError inputId="exp-month" message="Enter month as MM (01–12)" />
+                )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="exp-year">Year</Label>
                 <Input
                   id="exp-year"
+                  name="expiryYear"
                   inputMode="numeric"
+                  spellCheck={false}
                   autoComplete="cc-exp-year"
                   placeholder="YY"
                   maxLength={2}
                   value={card.expiryYear}
                   onChange={(e) => setCard({ ...card, expiryYear: e.target.value.replace(/\D/g, '') })}
-                  className={showFieldError(!expiryValid) ? 'border-destructive' : ''}
+                  aria-invalid={showFieldError(!yearValid) || undefined}
+                  aria-describedby={showFieldError(!yearValid) ? errorId('exp-year') : undefined}
+                  className={showFieldError(!yearValid) ? 'border-destructive' : ''}
                 />
+                {showFieldError(yearFormatValid && yearExpired) && (
+                  <FieldError inputId="exp-year" message="This card has expired" />
+                )}
+                {showFieldError(!yearFormatValid) && (
+                  <FieldError inputId="exp-year" message="Enter year as YY (e.g. 29)" />
+                )}
               </div>
             </div>
 
@@ -241,12 +331,18 @@ export function CardDeliveryDialog({
               <Label htmlFor="holder">Cardholder name</Label>
               <Input
                 id="holder"
+                name="holderName"
                 autoComplete="cc-name"
                 placeholder="JOHN DOE"
                 value={card.holderName}
                 onChange={(e) => setCard({ ...card, holderName: e.target.value.toUpperCase() })}
+                aria-invalid={showFieldError(!holderValid) || undefined}
+                aria-describedby={showFieldError(!holderValid) ? errorId('holder') : undefined}
                 className={showFieldError(!holderValid) ? 'border-destructive' : ''}
               />
+              {showFieldError(!holderValid) && (
+                <FieldError inputId="holder" message="Enter the name as printed on the card (min. 3 letters)" />
+              )}
             </div>
           </fieldset>
 
@@ -258,47 +354,76 @@ export function CardDeliveryDialog({
               <Label htmlFor="full-name">Full name</Label>
               <Input
                 id="full-name"
+                name="fullName"
                 autoComplete="name"
+                placeholder="Jane Appleseed"
                 value={delivery.fullName}
                 onChange={(e) => setDelivery({ ...delivery, fullName: e.target.value })}
-                className={showFieldError(delivery.fullName.trim().length <= 2) ? 'border-destructive' : ''}
+                aria-invalid={showFieldError(!fullNameValid) || undefined}
+                aria-describedby={showFieldError(!fullNameValid) ? errorId('full-name') : undefined}
+                className={showFieldError(!fullNameValid) ? 'border-destructive' : ''}
               />
+              {showFieldError(!fullNameValid) && (
+                <FieldError inputId="full-name" message="Enter your full name" />
+              )}
             </div>
 
             <div className="space-y-1">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
+                spellCheck={false}
                 autoComplete="email"
+                placeholder="name@example.com"
                 value={delivery.email}
                 onChange={(e) => setDelivery({ ...delivery, email: e.target.value })}
+                aria-invalid={showFieldError(!emailValid) || undefined}
+                aria-describedby={showFieldError(!emailValid) ? errorId('email') : undefined}
                 className={showFieldError(!emailValid) ? 'border-destructive' : ''}
               />
-              {showFieldError(!emailValid) && <p className="text-xs text-destructive">Invalid email</p>}
+              {showFieldError(!emailValid) && (
+                <FieldError inputId="email" message="Enter a valid email, e.g. name@example.com" />
+              )}
             </div>
 
             <div className="space-y-1">
               <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
+                name="phone"
                 inputMode="tel"
+                spellCheck={false}
                 autoComplete="tel"
+                placeholder="+57 300 123 4567"
                 value={delivery.phone}
                 onChange={(e) => setDelivery({ ...delivery, phone: e.target.value })}
-                className={showFieldError(delivery.phone.trim().length <= 5) ? 'border-destructive' : ''}
+                aria-invalid={showFieldError(!phoneValid) || undefined}
+                aria-describedby={showFieldError(!phoneValid) ? errorId('phone') : undefined}
+                className={showFieldError(!phoneValid) ? 'border-destructive' : ''}
               />
+              {showFieldError(!phoneValid) && (
+                <FieldError inputId="phone" message="Enter a phone number with country code, e.g. +57 300 123 4567" />
+              )}
             </div>
 
             <div className="space-y-1">
               <Label htmlFor="address">Address</Label>
               <Input
                 id="address"
+                name="address"
                 autoComplete="street-address"
+                placeholder="Street 123 #45-67"
                 value={delivery.address}
                 onChange={(e) => setDelivery({ ...delivery, address: e.target.value })}
-                className={showFieldError(delivery.address.trim().length <= 4) ? 'border-destructive' : ''}
+                aria-invalid={showFieldError(!addressValid) || undefined}
+                aria-describedby={showFieldError(!addressValid) ? errorId('address') : undefined}
+                className={showFieldError(!addressValid) ? 'border-destructive' : ''}
               />
+              {showFieldError(!addressValid) && (
+                <FieldError inputId="address" message="Enter the full street address" />
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -306,30 +431,53 @@ export function CardDeliveryDialog({
                 <Label htmlFor="city">City</Label>
                 <Input
                   id="city"
+                  name="city"
+                  autoComplete="address-level2"
+                  placeholder="Bogotá"
                   value={delivery.city}
                   onChange={(e) => setDelivery({ ...delivery, city: e.target.value })}
-                  className={showFieldError(delivery.city.trim().length <= 2) ? 'border-destructive' : ''}
+                  aria-invalid={showFieldError(!cityValid) || undefined}
+                  aria-describedby={showFieldError(!cityValid) ? errorId('city') : undefined}
+                  className={showFieldError(!cityValid) ? 'border-destructive' : ''}
                 />
+                {showFieldError(!cityValid) && <FieldError inputId="city" message="Enter the city" />}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="postal">Postal code</Label>
                 <Input
                   id="postal"
+                  name="postalCode"
+                  spellCheck={false}
+                  autoComplete="postal-code"
+                  placeholder="110111"
                   value={delivery.postalCode}
                   onChange={(e) => setDelivery({ ...delivery, postalCode: e.target.value })}
-                  className={showFieldError(delivery.postalCode.trim().length <= 0) ? 'border-destructive' : ''}
+                  aria-invalid={showFieldError(!postalValid) || undefined}
+                  aria-describedby={showFieldError(!postalValid) ? errorId('postal') : undefined}
+                  className={showFieldError(!postalValid) ? 'border-destructive' : ''}
                 />
+                {showFieldError(!postalValid) && (
+                  <FieldError inputId="postal" message="Enter the postal code" />
+                )}
               </div>
             </div>
           </fieldset>
 
-          <Button className="w-full" size="lg" onClick={submit} disabled={!formValid}>
+          {/* Never disabled by validity: an invalid submit reveals inline
+              errors and focuses the first invalid field instead of a dead end. */}
+          <Button className="w-full" size="lg" type="submit">
             Continue to summary
           </Button>
-          {touched && !formValid && (
-            <p className="text-center text-xs text-destructive">Please complete all fields correctly</p>
-          )}
-        </div>
+          {/* Polite live region: persists (possibly empty) so screen readers
+              announce the count the moment a failed submit populates it. */}
+          <div aria-live="polite">
+            {touched && invalidCount > 0 && (
+              <p className="text-center text-xs text-destructive">
+                {invalidCount} {invalidCount === 1 ? 'field needs' : 'fields need'} attention
+              </p>
+            )}
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

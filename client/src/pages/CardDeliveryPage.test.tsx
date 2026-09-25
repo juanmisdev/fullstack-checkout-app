@@ -39,7 +39,7 @@ describe('CardDeliveryDialog', () => {
     store.dispatch(startCheckout({ productId: 'prod_001', units: 1 }));
   });
 
-  it('rejects an invalid card number: button stays disabled and nothing is dispatched', async () => {
+  it('keeps the submit button ENABLED with an invalid card number; invalid click shows errors, focuses first invalid field, and dispatches nothing', async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.type(screen.getByLabelText('Card number'), '4242424242424241');
@@ -48,17 +48,67 @@ describe('CardDeliveryDialog', () => {
     await user.type(screen.getByLabelText('Year'), '29');
     await user.type(screen.getByLabelText('Cardholder name'), 'John Doe');
     await user.type(screen.getByLabelText('Full name'), 'John Doe');
-    await user.type(screen.getByLabelText('Email'), 'john@example.com');
+    await user.type(screen.getByLabelText('Email'), 'hola');
     await user.type(screen.getByLabelText('Phone'), '+573001234567');
     await user.type(screen.getByLabelText('Address'), 'Calle 1 #2-3');
     await user.type(screen.getByLabelText('City'), 'Bogota');
     await user.type(screen.getByLabelText('Postal code'), '110111');
 
     const submit = screen.getByRole('button', { name: /continue to summary/i });
-    expect(submit).toBeDisabled();
+    // Never a dead end: invalid form still leaves the button clickable.
+    expect(submit).toBeEnabled();
     await user.click(submit);
 
+    // Nothing dispatched, but every invalid field now explains itself.
     expect(store.getState().checkout.card).toBeNull();
+    expect(await screen.findByText(/Enter a valid 16-digit card number/)).toBeInTheDocument();
+    expect(screen.getByText(/Enter a valid email/)).toBeInTheDocument();
+
+    // Accessibility wiring: aria-invalid on invalid inputs pointing at errors.
+    const email = screen.getByLabelText('Email');
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAttribute('aria-describedby', 'email-error');
+
+    // Focus moved to the FIRST invalid field in DOM order (card number here).
+    expect(document.activeElement).toBe(screen.getByLabelText('Card number'));
+
+    // Summary count is announced via the polite live region.
+    expect(screen.getByText(/2 fields need attention/)).toBeInTheDocument();
+
+    // Fixing the fields clears the errors and lets the next submit through.
+    await user.type(screen.getByLabelText('Email'), '@example.com');
+    expect(screen.queryByText(/Enter a valid email/)).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Card number'));
+    await user.type(screen.getByLabelText('Card number'), '4242424242424242');
+    await user.click(submit);
+    await waitFor(() => {
+      expect(store.getState().checkout.step).toBe('summary');
+    });
+  });
+
+  it('shows the expired-year error for month 12 / year 12 (format-valid but semantically expired)', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.type(screen.getByLabelText('Card number'), '4242424242424242');
+    await user.type(screen.getByLabelText('CVV'), '123');
+    await user.type(screen.getByLabelText('Month'), '12');
+    await user.type(screen.getByLabelText('Year'), '12');
+    await user.type(screen.getByLabelText('Cardholder name'), 'John Doe');
+    await user.type(screen.getByLabelText('Full name'), 'John Doe');
+    await user.type(screen.getByLabelText('Email'), 'john@example.com');
+    await user.type(screen.getByLabelText('Phone'), '+573001234567');
+    await user.type(screen.getByLabelText('Address'), 'Calle 1 #2-3');
+    await user.type(screen.getByLabelText('City'), 'Bogota');
+    await user.type(screen.getByLabelText('Postal code'), '110111');
+
+    await user.click(screen.getByRole('button', { name: /continue to summary/i }));
+
+    // Year '12' normalizes to 2012 — the server rejects it; the client now
+    // surfaces "expired" before the network round-trip.
+    expect(await screen.findByText(/This card has expired/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Year')).toHaveAttribute('aria-invalid', 'true');
+    expect(document.activeElement).toBe(screen.getByLabelText('Year'));
+    expect(store.getState().checkout.step).toBe('card-delivery');
   });
 
   it('submits valid card + delivery data to the store', async () => {
@@ -90,34 +140,53 @@ describe('CardDeliveryDialog', () => {
     expect(screen.getByLabelText('Card number')).toHaveValue('4242 4242 4242 4242');
   });
 
-  it('disables the submit button while the form is empty and untouched', () => {
+  it('submits via Enter key (native form semantics)', async () => {
+    const user = userEvent.setup();
     renderDialog();
-    expect(screen.getByRole('button', { name: /continue to summary/i })).toBeDisabled();
+    await fillValidForm(user);
+    fireEvent.submit(screen.getByLabelText('Card number').closest('form')!);
+    await waitFor(() => {
+      expect(store.getState().checkout.step).toBe('summary');
+    });
   });
 
   it('enables the submit button once every field is valid', async () => {
     const user = userEvent.setup();
     renderDialog();
     const submit = screen.getByRole('button', { name: /continue to summary/i });
-    expect(submit).toBeDisabled();
+    // The button is never disabled by form validity — even pristine.
+    expect(submit).toBeEnabled();
     await fillValidForm(user);
     expect(submit).toBeEnabled();
   });
 
-  it('shows the error message after a valid submit is degraded, and clears it once fixed', async () => {
+  it('keeps the button enabled after an empty submit and shows the error summary', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    const submit = screen.getByRole('button', { name: /continue to summary/i });
+    await user.click(submit);
+
+    expect(submit).toBeEnabled();
+    expect(await screen.findByText(/11 fields need attention/)).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByLabelText('Card number'));
+    expect(store.getState().checkout.step).toBe('card-delivery');
+  });
+
+  it('shows per-field errors after a valid submit is degraded, and clears them once fixed', async () => {
     const user = userEvent.setup();
     renderDialog();
     await fillValidForm(user);
 
     // onOpenChange is a stub, so the dialog stays mounted after submit and
-    // `touched` remains true — degrading a field now surfaces the message.
+    // `touched` remains true — degrading a field now surfaces its inline error.
     await user.click(screen.getByRole('button', { name: /continue to summary/i }));
     await user.clear(screen.getByLabelText('CVV'));
 
-    expect(await screen.findByText('Please complete all fields correctly')).toBeInTheDocument();
+    expect(await screen.findByText(/CVV is the 3–4 digit code on the back/)).toBeInTheDocument();
+    expect(screen.getByText(/1 field needs attention/)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText('CVV'), '123');
-    expect(screen.queryByText('Please complete all fields correctly')).not.toBeInTheDocument();
+    expect(screen.queryByText(/CVV is the 3–4 digit code/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue to summary/i })).toBeEnabled();
   });
 
@@ -146,7 +215,6 @@ describe('CardDeliveryDialog', () => {
     autofill('Postal code', '110111');
 
     const submit = screen.getByRole('button', { name: /continue to summary/i });
-    expect(submit).toBeDisabled();
 
     // The dialog's self-healing sync runs at 300ms and 1000ms after open.
     await act(async () => {
