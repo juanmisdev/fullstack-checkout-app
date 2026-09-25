@@ -12,7 +12,7 @@ function ProductCard({ product }: { product: ProductDto }) {
   const [units, setUnits] = useState(1);
 
   return (
-    <div className="flex w-full flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm">
+    <div className="flex h-full w-full flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
       <img
         src={product.imageUrl}
         alt={product.name}
@@ -32,7 +32,7 @@ function ProductCard({ product }: { product: ProductDto }) {
         </p>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="mt-auto flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -83,11 +83,13 @@ export function ProductPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-col gap-4 p-4">
-      <h1 className="text-2xl font-semibold">Our products</h1>
-      {products.map((p) => (
-        <ProductCard key={p.id} product={p} />
-      ))}
+    <div className="mx-auto w-full max-w-6xl p-4 md:p-8">
+      <h1 className="mb-6 text-2xl font-semibold md:text-3xl">Our products</h1>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {products.map((p) => (
+          <ProductCard key={p.id} product={p} />
+        ))}
+      </div>
     </div>
   );
 }
